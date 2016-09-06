@@ -9,6 +9,7 @@ SET(OPIFEX_ENGINE_REPOSITORY CACHE STRING "../OPengine/")
 include(CMake/application.cmake)
 
 
+add_marketplace_addons_projects()
 
 
 #########################################
@@ -36,6 +37,7 @@ add_source_group_recurse("${PROJECT_SOURCE_DIR}/src" "" APPLICATION_SRC)
 add_opifex_executable(9_Application ${APPLICATION_SRC})
 
 add_opifex_definitions(9_Application "")
+add_marketplace_addons(9_Application "${BINARY_RELEASE_MODE}/" OPIFEX_ASSETS_ADDITIONAL)
 add_opifex_defines()
 set_target_properties(9_Application PROPERTIES OUTPUT_NAME "Tool-OPM")
 add_opifex_libraries(9_Application)

@@ -1,19 +1,29 @@
 //////////////////////////////////////
 // Application Entry Point
 //////////////////////////////////////
-#include "./OPengine.h"
 #include "Main.h"
 #include "GameState.h"
+#include "./OPassimp.h"
 
 //////////////////////////////////////
 // Application Methods
 //////////////////////////////////////
 
 OPwindow mainWindow;
-
 void ApplicationInit() {
 	OPCMAN.Init(OPIFEX_ASSETS);
 	OPloadersAddDefault();
+	OPassimpAddLoaders();
+
+	OPassetLoader loaderFBX = {
+		".fbx",
+		"Models/",
+		sizeof(OPmesh),
+		(OPint(*)(OPstream*, void**))OPassimpLoadMem,
+		(OPint(*)(void*))OPassimpUnLoad,
+		NULL
+	};
+	OPCMAN.AddLoader(&loaderFBX);
 
 	OPrenderSetup();
 
@@ -52,17 +62,37 @@ void ApplicationSetup() {
 	OPdestroy = ApplicationDestroy;
 }
 
+#include "OPMconvert.h"
+
 //////////////////////////////////////
 // Application Entry Point
 //////////////////////////////////////
 OP_MAIN_START
 
-	OPLOGLEVEL = (ui32)OPlogLevel::VERBOSE;
+	OPLOGLEVEL = (ui32)OPlogLevel::INFO;
 	OPlog("Starting up OPifex Engine");
 
-	ApplicationSetup();
+	if (argc == 2) {
+		OPlog(args[0]);
+		OPlog(args[1]);
+		OPchar* filename = OPstringCopy(args[1]);
+		i32 ind = -1;
+		for (ui32 i = 0; i < strlen(filename); i++) {
+			if (filename[i] == '.') {
+				ind = i;
+			}
+		}
 
-	OP_MAIN_RUN
-	//OP_MAIN_RUN_STEPPED
+		if (ind > -1) {
+			filename[ind] = NULL;
+		}
 
+		OPchar* output = OPstringCreateMerged(filename, ".opm");
+
+		ExportOPM(args[1], output, 1.0f, NULL, true, true, true, true, false, false, false, false, 0, NULL, NULL, NULL);
+	} else {
+		ApplicationSetup();
+		OP_MAIN_RUN
+		//OP_MAIN_RUN_STEPPED
+	}
 OP_MAIN_END
