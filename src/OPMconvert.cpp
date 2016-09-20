@@ -510,7 +510,7 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 			writeU32(&myFile, model->meshes[i].meshMeta->count);
 			for (ui32 j = 0; j < model->meshes[i].meshMeta->count; j++) {
 				writeU32(&myFile, (ui32)model->meshes[i].meshMeta->metaType[j]);
-				OPchar* test = model->meshes[i].meshMeta->data->String();
+				OPchar* test = model->meshes[i].meshMeta->data[j]->String();
 				writeString(&myFile, test);
 				//write(&myFile, model->meshes[i].meshMeta->data->Data, model->meshes[i].meshMeta->data->Length);
 			}

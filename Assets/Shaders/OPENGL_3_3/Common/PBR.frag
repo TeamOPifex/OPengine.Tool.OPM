@@ -292,6 +292,6 @@ void main()
 
 	vec3 finalColor = material.albedo.rgb * diffuse.rgb * visibility + (specular + IBL(light, material, eye)) * visibility;
 	finalColor = FinalGamma(finalColor);
-	color = vec4(finalColor, material.albedo.a);
+	color = vec4(finalColor, 1.0);
 	//color = vec4(material.specular, 1);
 }

@@ -69,7 +69,7 @@ void ApplicationSetup() {
 //////////////////////////////////////
 OP_MAIN_START
 
-	OPLOGLEVEL = (ui32)OPlogLevel::INFO;
+	OPLOGLEVEL = (ui32)OPlogLevel::TIMING;
 	OPlog("Starting up OPifex Engine");
 
 	if (argc == 2) {

@@ -3,6 +3,7 @@
 #include "OPMconvert.h"
 
 #include "OPimgui.h"
+#include "OPlibjpegturbo.h"
 
 
 OPscene scene;
@@ -79,13 +80,57 @@ bool LoadMeshFromFile(const OPchar* filename) {
 			else {
 				materialPBRInstancesArr[i]->SetAlbedoMap(result);
 			}
-
-		} else {
+		}
+		else {
 			materialPBRInstancesArr[i]->SetAlbedoMap("Default_Albedo.png");
 		}
-		materialPBRInstancesArr[i]->SetSpecularMap("Default_Specular.png");
+
+
+		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->normal != NULL) {
+
+			ext = strrchr(filename, '\\');
+			outputRoot = OPstringCopy(filename);
+			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
+			outputRoot[pos] = NULL;
+
+			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->normal);
+			OPlogInfo("NORMAL: %s", model.meshes[i].materialDesc->normal);
+			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
+			if (result == NULL) {
+				materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
+			}
+			else {
+				materialPBRInstancesArr[i]->SetNormalMap(result);
+			}
+		}
+		else {
+			materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
+		}
+
+
+		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->specular != NULL) {
+
+			ext = strrchr(filename, '\\');
+			outputRoot = OPstringCopy(filename);
+			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
+			outputRoot[pos] = NULL;
+
+			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->specular);
+			OPlogInfo("SPECULAR: %s", model.meshes[i].materialDesc->specular);
+			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
+			if (result == NULL) {
+				materialPBRInstancesArr[i]->SetSpecularMap("Default_Specular.png");
+			}
+			else {
+				materialPBRInstancesArr[i]->SetSpecularMap(result);
+			}
+		}
+		else {
+			materialPBRInstancesArr[i]->SetSpecularMap("Default_Specular.png");
+		}
+
+
 		materialPBRInstancesArr[i]->SetGlossMap("Default_Gloss.png");
-		materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
 		materialPBRInstancesArr[i]->SetEnvironmentMap(&environment);
 
 		materialInstancesArr[i] = &materialPBRInstancesArr[i]->rootMaterialInstance;
@@ -147,7 +192,7 @@ void DropCallback(OPuint count, const OPchar** filenames) {
 		ext = strrchr(filenames[i], '.');
 		if (ext == NULL) continue;
 
-		if (OPstringEquals(ext, ".png") || OPstringEquals(ext, ".jpg")) {
+		if (OPstringEquals(ext, ".png") || OPstringEquals(ext, ".jpg") || OPstringEquals(ext, ".tga")) {
 			OPtexture* tex = (OPtexture*)OPCMAN.LoadFromFile(filenames[i]);
 			if (tex == NULL) continue;
 			texFile = OPstringCopy(filenames[i]);
@@ -269,59 +314,12 @@ void DropCallback(OPuint count, const OPchar** filenames) {
 	}
 }
 
-#include "turbojpeg.h"
-
-OPint OPloaderJPEG(OPstream* stream, OPtexture** image) {
-
-	int jpegSubsamp, width, height;
-
-	tjhandle _jpegDecompressor = tjInitDecompress();
-
-	tjDecompressHeader2(_jpegDecompressor, stream->Data, stream->Length, &width, &height, &jpegSubsamp);
-
-	ui8* data = OPALLOC(ui8, width * height * 3);
-
-	tjDecompress2(_jpegDecompressor, stream->Data, stream->Length, data, width, 0/*pitch*/, height, TJPF_RGB, TJFLAG_FASTDCT);
-
-	tjDestroy(_jpegDecompressor);
-
-	OPtexture* tex = OPNEW(OPtexture());
-
-	ui16 w = width, h = height;
-	OPtextureDesc desc;
-	desc.width = w;
-	desc.height = h;
-
-	desc.format = OPtextureFormat::RGB;
-
-	desc.wrap = OPtextureWrap::REPEAT;
-	desc.filter = OPtextureFilter::LINEAR;
-
-	OPRENDERER_ACTIVE->Texture.Init(tex, desc);
-	tex->SetData(data);
-
-	OPfree(data);
-
-	*image = tex;
-
-	return 1;
-}
-
-OPassetLoader OPLOADER_JPEG = {
-	".jpg",
-	"Textures/",
-	sizeof(OPtexture),
-	(OPint(*)(OPstream*, void**))OPloaderJPEG,
-	NULL,
-	NULL
-};
-
 void ExampleStateInit(OPgameState* last) {
 	OPimguiInit(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE, true);
 
 	mainWindow.SetDropCallback(DropCallback);
 
-	OPCMAN.AddLoader(&OPLOADER_JPEG);
+	OPCMAN.AddLoader(&OPASSETLOADER_JPG);
 
 
 	const OPchar* envImages[6] = {
