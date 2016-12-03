@@ -1,12 +1,14 @@
 #include "OPMconvert.h"
-#include "./OPassimp.h"
 #include "./Data/include/OPstring.h"
 #include "./Human/include/Rendering/OPMvertex.h"
+#ifdef ADDON_assimp
+#include "./OPassimp.h"
+#endif
 
 #include <iostream>
 #include <fstream>
 using namespace std;
-
+ 
 void write(ofstream* stream, void* data, i32 size) {
 	stream->write((char*)data, size);
 }
@@ -55,6 +57,7 @@ enum ModelFeatures {
 };
 
 ui32 GetAvailableTracks(const OPchar* filename, OPchar** buff, double* durations, ui32 max) {
+#ifdef ADDON_assimp
 	Assimp::Importer importer;
 
 	const aiScene* scene = importer.ReadFile(filename,
@@ -64,8 +67,8 @@ ui32 GetAvailableTracks(const OPchar* filename, OPchar** buff, double* durations
 		aiProcess_SortByPType |
 		aiProcess_OptimizeMeshes |
 		aiProcess_OptimizeGraph
-	);	
-	
+	);
+
 	// If the import failed, report it
 	if (!scene)
 	{
@@ -84,6 +87,8 @@ ui32 GetAvailableTracks(const OPchar* filename, OPchar** buff, double* durations
 	}
 
 	return i;
+    #endif
+    return 0;
 }
 
 struct BoneWeight {
@@ -105,9 +110,10 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 	ui32* splitEnd,
 	OPchar** splitName) {
 
+        #ifdef ADDON_assimp
 	Assimp::Importer importer;
 	// And have it read the given file with some example postprocessing
-	// Usually - if speed is not the most important aspect for you - you'll 
+	// Usually - if speed is not the most important aspect for you - you'll
 	// propably to request more postprocessing than we do in this example.
 	const aiScene* scene = importer.ReadFile(filename,
 		aiProcess_CalcTangentSpace |
@@ -116,7 +122,7 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 		aiProcess_SortByPType |
 		aiProcess_OptimizeMeshes |
 		aiProcess_OptimizeGraph
-	); 
+	);
 	//|
 	//	aiProcess_OptimizeMeshes |
 	//	aiProcess_OptimizeGraph
@@ -265,7 +271,7 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 		if (features[Model_Bones] && !mesh->HasBones()) {
 			continue;
 		}
-				
+
 		writeString(&myFile, mesh->mName.C_Str());
 
 		ui32 totalVertices = 0;
@@ -579,4 +585,5 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 	}
 
 	OPlog(output);
+    #endif
 }

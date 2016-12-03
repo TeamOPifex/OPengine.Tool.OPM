@@ -269,6 +269,7 @@ void DropCallback(OPuint count, const OPchar** filenames) {
 	}
 }
 
+#ifdef ADDON_turbojpeg
 #include "turbojpeg.h"
 
 OPint OPloaderJPEG(OPstream* stream, OPtexture** image) {
@@ -316,12 +317,16 @@ OPassetLoader OPLOADER_JPEG = {
 	NULL
 };
 
+#endif
+
 void ExampleStateInit(OPgameState* last) {
 	OPimguiInit(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE, true);
 
 	mainWindow.SetDropCallback(DropCallback);
 
+    #ifdef ADDON_turbojpeg
 	OPCMAN.AddLoader(&OPLOADER_JPEG);
+    #endif
 
 
 	const OPchar* envImages[6] = {
@@ -375,7 +380,7 @@ void ExampleStateRender(OPfloat delta) {
 	scene.Render(delta);
 
 	OPimguiNewFrame();
-	
+
 	bool openDebugInfo = true;// texFile != NULL || meshFile != NULL;
 	ImGui::SetNextWindowPos(ImVec2(10, 10));
 	ImGui::Begin("Overlay", &openDebugInfo, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width - 20 - 200, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
