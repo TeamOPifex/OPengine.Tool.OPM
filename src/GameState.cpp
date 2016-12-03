@@ -2,12 +2,16 @@
 #include "Main.h"
 #include "OPMconvert.h"
 
+#include "./Pipeline/include/OPrendererFullForward.h"
+
 #include "OPimgui.h"
 #include "OPlibjpegturbo.h"
 
 
 OPscene scene;
-OPrendererForward* renderer;
+//OPrendererForward* renderer;
+OPrendererFullForward* fullForwardRenderer;
+
 OPmaterialPBR materialPBR;
 OPtextureCube environment;
 OPmaterialPBRInstance* materialInstance;
@@ -16,7 +20,7 @@ OPmaterialInstance* materialInstances;
 OPmaterialInstance** materialInstancesArr = NULL;
 OPmaterialPBRInstance** materialPBRInstancesArr = NULL;
 OPmodel model;
-OPsceneEntity* entity;
+OPrendererEntity* entity;
 OPcamFreeFlight camera;
 OPfloat Rotation = 0;
 OPfloat Scale = 1.0f;
@@ -64,15 +68,15 @@ bool LoadMeshFromFile(const OPchar* filename) {
 	materialInstancesArr = OPALLOC(OPmaterialInstance*, model.meshCount);
 	for (ui32 i = 0; i < model.meshCount; i++) {
 
-		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->albedo != NULL) {
+		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->diffuse != NULL) {
 
 			ext = strrchr(filename, '\\');
 			outputRoot = OPstringCopy(filename);
 			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
 			outputRoot[pos] = NULL;
 
-			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->albedo);
-			OPlogInfo("TEXTURE: %s", model.meshes[i].materialDesc->albedo);
+			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->diffuse);
+			OPlogInfo("TEXTURE: %s", model.meshes[i].materialDesc->diffuse);
 			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
 			if (result == NULL) {
 				materialPBRInstancesArr[i]->SetAlbedoMap("Default_Albedo.png");
@@ -86,15 +90,15 @@ bool LoadMeshFromFile(const OPchar* filename) {
 		}
 
 
-		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->normal != NULL) {
+		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->normals != NULL) {
 
 			ext = strrchr(filename, '\\');
 			outputRoot = OPstringCopy(filename);
 			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
 			outputRoot[pos] = NULL;
 
-			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->normal);
-			OPlogInfo("NORMAL: %s", model.meshes[i].materialDesc->normal);
+			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->normals);
+			OPlogInfo("NORMAL: %s", model.meshes[i].materialDesc->normals);
 			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
 			if (result == NULL) {
 				materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
@@ -332,27 +336,27 @@ void ExampleStateInit(OPgameState* last) {
 	};
 	environment.Init(envImages);
 
-	renderer = OPrendererForward::Create();
-	scene.Init(&renderer->rendererRoot, 1000, 50);
+	fullForwardRenderer = OPrendererFullForward::Create();
+	scene.Init(&fullForwardRenderer->rendererRoot, 1000, 50);
 
 	camera.Init(1.0f, 1.0f, OPvec3(0, 5, 5));
 	scene.camera = &camera.Camera;
 
-	materialPBR.Init(OPNEW(OPeffect("Common/PBR.vert", "Common/PBR.frag")));
-	materialPBR.rootMaterial.AddParam("uCamPos", &camera.Camera.pos);
-	renderer->SetMaterial(&materialPBR.rootMaterial, 0);
+	//materialPBR.Init(OPNEW(OPeffect("Common/PBR.vert", "Common/PBR.frag")));
+	//materialPBR.rootMaterial.AddParam("uCamPos", &camera.Camera.pos);
+	//renderer->SetMaterial(&materialPBR.rootMaterial, 0);
 
-	materialInstance = materialPBR.CreateInstance();
-	materialInstance->SetAlbedoMap("Default_Albedo.png");
-	materialInstance->SetSpecularMap("Default_Specular.png");
-	materialInstance->SetGlossMap("Default_Gloss.png");
-	materialInstance->SetNormalMap("Default_Normals.png");
-	materialInstance->SetEnvironmentMap(&environment);
+	//materialInstance = materialPBR.CreateInstance();
+	//materialInstance->SetAlbedoMap("Default_Albedo.png");
+	//materialInstance->SetSpecularMap("Default_Specular.png");
+	//materialInstance->SetGlossMap("Default_Gloss.png");
+	//materialInstance->SetNormalMap("Default_Normals.png");
+	//materialInstance->SetEnvironmentMap(&environment);
 
-	model = *(OPmodel*)OPCMAN.LoadGet("ground_block_2x2x2.opm");
+	model = *(OPmodel*)OPCMAN.LoadGet("box.opm");
 
-	materialInstances = &materialInstance->rootMaterialInstance;
-	entity = scene.Add(&model, &materialInstances);
+	//materialInstances = &materialInstance->rootMaterialInstance;
+	entity = scene.Add(&model, OPrendererEntityDesc(false));
 }
 
 
@@ -364,7 +368,7 @@ OPint ExampleStateUpdate(OPtimer* time) {
 
 void ExampleStateRender(OPfloat delta) {
 	OPrenderClear(0.2f, 0.2f, 0.2f, 1);
-	OPrenderCullMode(0);
+	OPrenderCullMode(OPcullFace::BACK);
 	OPrenderCull(false);
 	//OPrenderBlend(true);
 	//OPrenderDepth(false);

@@ -85,19 +85,8 @@ Attributes gAttributes;
 
 vec4 GammaCorrectTexture(sampler2D tex, vec2 uv)
 {
-	vec4 samp1 = texture(tex, uv);
-	float dist = 0.002;
-	vec4 samp2 = texture(tex, uv + vec2(dist, dist));
-	vec4 samp3 = texture(tex, uv + vec2(dist, 0.0));
-	vec4 samp4 = texture(tex, uv + vec2(dist, -dist));
-	vec4 samp5 = texture(tex, uv + vec2(0.0, -dist));
-	vec4 samp6 = texture(tex, uv + vec2(-dist, -dist));
-	vec4 samp7 = texture(tex, uv + vec2(-dist, 0.0));
-	vec4 samp8 = texture(tex, uv + vec2(-dist, dist));
-	vec4 samp9 = texture(tex, uv + vec2(0.0, dist));
-	vec4 result = (samp1 + samp2 + samp3 + samp4 + samp5 + samp6 + samp7 + samp8 + samp9) / 9.0;
-	result = (result + samp2) / 2.0;
-	return vec4(pow(result.rgb, vec3(GAMMA)), result.a);
+	vec4 samp = texture(tex, uv);
+	return vec4(pow(samp.rgb, vec3(GAMMA)), samp.a);
 }
 
 vec3 GammaCorrectTextureRGB(sampler2D tex, vec2 uv)
@@ -265,7 +254,7 @@ void main()
 	material.specular = GetSpecular();
 	material.roughness = GetRoughness();
 
-	vec4 diffuse = vec4(0.1);
+	vec4 diffuse = vec4(0.0);
 	vec3 specular = vec3(0.0);
 
 	// TODO: Multiple lights
@@ -292,6 +281,6 @@ void main()
 
 	vec3 finalColor = material.albedo.rgb * diffuse.rgb * visibility + (specular + IBL(light, material, eye)) * visibility;
 	finalColor = FinalGamma(finalColor);
-	color = vec4(finalColor, 1.0);
+	color = vec4(finalColor, material.albedo.a);
 	//color = vec4(material.specular, 1);
 }
