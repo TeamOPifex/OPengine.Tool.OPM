@@ -2,11 +2,16 @@
 #include "Main.h"
 #include "OPMconvert.h"
 
+#include "./Pipeline/include/OPrendererFullForward.h"
+
 #include "OPimgui.h"
+#include "OPlibjpegturbo.h"
 
 
 OPscene scene;
-OPrendererForward* renderer;
+//OPrendererForward* renderer;
+OPrendererFullForward* fullForwardRenderer;
+
 OPmaterialPBR materialPBR;
 OPtextureCube environment;
 OPmaterialPBRInstance* materialInstance;
@@ -15,7 +20,7 @@ OPmaterialInstance* materialInstances;
 OPmaterialInstance** materialInstancesArr = NULL;
 OPmaterialPBRInstance** materialPBRInstancesArr = NULL;
 OPmodel model;
-OPsceneEntity* entity;
+OPrendererEntity* entity;
 OPcamFreeFlight camera;
 OPfloat Rotation = 0;
 OPfloat Scale = 1.0f;
@@ -63,15 +68,15 @@ bool LoadMeshFromFile(const OPchar* filename) {
 	materialInstancesArr = OPALLOC(OPmaterialInstance*, model.meshCount);
 	for (ui32 i = 0; i < model.meshCount; i++) {
 
-		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->albedo != NULL) {
+		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->diffuse != NULL) {
 
 			ext = strrchr(filename, '\\');
 			outputRoot = OPstringCopy(filename);
 			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
 			outputRoot[pos] = NULL;
 
-			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->albedo);
-			OPlogInfo("TEXTURE: %s", model.meshes[i].materialDesc->albedo);
+			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->diffuse);
+			OPlogInfo("TEXTURE: %s", model.meshes[i].materialDesc->diffuse);
 			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
 			if (result == NULL) {
 				materialPBRInstancesArr[i]->SetAlbedoMap("Default_Albedo.png");
@@ -79,13 +84,57 @@ bool LoadMeshFromFile(const OPchar* filename) {
 			else {
 				materialPBRInstancesArr[i]->SetAlbedoMap(result);
 			}
-
-		} else {
+		}
+		else {
 			materialPBRInstancesArr[i]->SetAlbedoMap("Default_Albedo.png");
 		}
-		materialPBRInstancesArr[i]->SetSpecularMap("Default_Specular.png");
+
+
+		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->normals != NULL) {
+
+			ext = strrchr(filename, '\\');
+			outputRoot = OPstringCopy(filename);
+			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
+			outputRoot[pos] = NULL;
+
+			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->normals);
+			OPlogInfo("NORMAL: %s", model.meshes[i].materialDesc->normals);
+			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
+			if (result == NULL) {
+				materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
+			}
+			else {
+				materialPBRInstancesArr[i]->SetNormalMap(result);
+			}
+		}
+		else {
+			materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
+		}
+
+
+		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->specular != NULL) {
+
+			ext = strrchr(filename, '\\');
+			outputRoot = OPstringCopy(filename);
+			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
+			outputRoot[pos] = NULL;
+
+			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->specular);
+			OPlogInfo("SPECULAR: %s", model.meshes[i].materialDesc->specular);
+			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
+			if (result == NULL) {
+				materialPBRInstancesArr[i]->SetSpecularMap("Default_Specular.png");
+			}
+			else {
+				materialPBRInstancesArr[i]->SetSpecularMap(result);
+			}
+		}
+		else {
+			materialPBRInstancesArr[i]->SetSpecularMap("Default_Specular.png");
+		}
+
+
 		materialPBRInstancesArr[i]->SetGlossMap("Default_Gloss.png");
-		materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
 		materialPBRInstancesArr[i]->SetEnvironmentMap(&environment);
 
 		materialInstancesArr[i] = &materialPBRInstancesArr[i]->rootMaterialInstance;
@@ -147,7 +196,7 @@ void DropCallback(OPuint count, const OPchar** filenames) {
 		ext = strrchr(filenames[i], '.');
 		if (ext == NULL) continue;
 
-		if (OPstringEquals(ext, ".png") || OPstringEquals(ext, ".jpg")) {
+		if (OPstringEquals(ext, ".png") || OPstringEquals(ext, ".jpg") || OPstringEquals(ext, ".tga")) {
 			OPtexture* tex = (OPtexture*)OPCMAN.LoadFromFile(filenames[i]);
 			if (tex == NULL) continue;
 			texFile = OPstringCopy(filenames[i]);
@@ -269,64 +318,12 @@ void DropCallback(OPuint count, const OPchar** filenames) {
 	}
 }
 
-#ifdef ADDON_turbojpeg
-#include "turbojpeg.h"
-
-OPint OPloaderJPEG(OPstream* stream, OPtexture** image) {
-
-	int jpegSubsamp, width, height;
-
-	tjhandle _jpegDecompressor = tjInitDecompress();
-
-	tjDecompressHeader2(_jpegDecompressor, stream->Data, stream->Length, &width, &height, &jpegSubsamp);
-
-	ui8* data = OPALLOC(ui8, width * height * 3);
-
-	tjDecompress2(_jpegDecompressor, stream->Data, stream->Length, data, width, 0/*pitch*/, height, TJPF_RGB, TJFLAG_FASTDCT);
-
-	tjDestroy(_jpegDecompressor);
-
-	OPtexture* tex = OPNEW(OPtexture());
-
-	ui16 w = width, h = height;
-	OPtextureDesc desc;
-	desc.width = w;
-	desc.height = h;
-
-	desc.format = OPtextureFormat::RGB;
-
-	desc.wrap = OPtextureWrap::REPEAT;
-	desc.filter = OPtextureFilter::LINEAR;
-
-	OPRENDERER_ACTIVE->Texture.Init(tex, desc);
-	tex->SetData(data);
-
-	OPfree(data);
-
-	*image = tex;
-
-	return 1;
-}
-
-OPassetLoader OPLOADER_JPEG = {
-	".jpg",
-	"Textures/",
-	sizeof(OPtexture),
-	(OPint(*)(OPstream*, void**))OPloaderJPEG,
-	NULL,
-	NULL
-};
-
-#endif
-
 void ExampleStateInit(OPgameState* last) {
 	OPimguiInit(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE, true);
 
 	mainWindow.SetDropCallback(DropCallback);
 
-    #ifdef ADDON_turbojpeg
-	OPCMAN.AddLoader(&OPLOADER_JPEG);
-    #endif
+	OPCMAN.AddLoader(&OPASSETLOADER_JPG);
 
 
 	const OPchar* envImages[6] = {
@@ -339,27 +336,27 @@ void ExampleStateInit(OPgameState* last) {
 	};
 	environment.Init(envImages);
 
-	renderer = OPrendererForward::Create();
-	scene.Init(&renderer->rendererRoot, 1000, 50);
+	fullForwardRenderer = OPrendererFullForward::Create();
+	scene.Init(&fullForwardRenderer->rendererRoot, 1000, 50);
 
 	camera.Init(1.0f, 1.0f, OPvec3(0, 5, 5));
 	scene.camera = &camera.Camera;
 
-	materialPBR.Init(OPNEW(OPeffect("Common/PBR.vert", "Common/PBR.frag")));
-	materialPBR.rootMaterial.AddParam("uCamPos", &camera.Camera.pos);
-	renderer->SetMaterial(&materialPBR.rootMaterial, 0);
+	//materialPBR.Init(OPNEW(OPeffect("Common/PBR.vert", "Common/PBR.frag")));
+	//materialPBR.rootMaterial.AddParam("uCamPos", &camera.Camera.pos);
+	//renderer->SetMaterial(&materialPBR.rootMaterial, 0);
 
-	materialInstance = materialPBR.CreateInstance();
-	materialInstance->SetAlbedoMap("Default_Albedo.png");
-	materialInstance->SetSpecularMap("Default_Specular.png");
-	materialInstance->SetGlossMap("Default_Gloss.png");
-	materialInstance->SetNormalMap("Default_Normals.png");
-	materialInstance->SetEnvironmentMap(&environment);
+	//materialInstance = materialPBR.CreateInstance();
+	//materialInstance->SetAlbedoMap("Default_Albedo.png");
+	//materialInstance->SetSpecularMap("Default_Specular.png");
+	//materialInstance->SetGlossMap("Default_Gloss.png");
+	//materialInstance->SetNormalMap("Default_Normals.png");
+	//materialInstance->SetEnvironmentMap(&environment);
 
-	model = *(OPmodel*)OPCMAN.LoadGet("ground_block_2x2x2.opm");
+	model = *(OPmodel*)OPCMAN.LoadGet("box.opm");
 
-	materialInstances = &materialInstance->rootMaterialInstance;
-	entity = scene.Add(&model, &materialInstances);
+	//materialInstances = &materialInstance->rootMaterialInstance;
+	entity = scene.Add(&model, OPrendererEntityDesc(false));
 }
 
 
@@ -371,7 +368,7 @@ OPint ExampleStateUpdate(OPtimer* time) {
 
 void ExampleStateRender(OPfloat delta) {
 	OPrenderClear(0.2f, 0.2f, 0.2f, 1);
-	OPrenderCullMode(0);
+	OPrenderCullMode(OPcullFace::BACK);
 	OPrenderCull(false);
 	//OPrenderBlend(true);
 	//OPrenderDepth(false);
@@ -380,7 +377,7 @@ void ExampleStateRender(OPfloat delta) {
 	scene.Render(delta);
 
 	OPimguiNewFrame();
-
+	
 	bool openDebugInfo = true;// texFile != NULL || meshFile != NULL;
 	ImGui::SetNextWindowPos(ImVec2(10, 10));
 	ImGui::Begin("Overlay", &openDebugInfo, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width - 20 - 200, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
