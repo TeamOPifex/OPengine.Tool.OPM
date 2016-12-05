@@ -93,7 +93,19 @@ OP_MAIN_START
 
 		OPchar* output = OPstringCreateMerged(filename, ".opm");
 
-		ExportOPM(args[1], output, 1.0f, NULL, true, true, true, true, false, false, false, false, 0, NULL, NULL, NULL);
+		OPexporter exporter = OPexporter(args[1]);
+		exporter.Feature_Normals = true;
+		exporter.Feature_UVs = true;
+		exporter.Feature_Tangents = true;
+		exporter.Feature_BiTangents = true;
+		exporter.Feature_Colors = true;
+		exporter.Feature_Bones = false;
+		exporter.Export_Model = true;
+		exporter.Export_Skeleton = false;
+		exporter.Export_Animations = false;
+		exporter.Export(output);
+
+		// ExportOPM(args[1], output, 1.0f, NULL, true, true, true, true, false, false, false, false, 0, NULL, NULL, NULL);
 	} else {
 		ApplicationSetup();
 		OP_MAIN_RUN

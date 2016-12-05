@@ -1,8 +1,6 @@
 #include "OPMconvert.h"
-#include "./OPassimp.h"
 #include "./Data/include/OPstring.h"
 #include "./Human/include/Rendering/OPMvertex.h"
-#include "Utils.h"
 
 void OPexporter::Init(const OPchar* filename) {
 	path = filename;
@@ -27,7 +25,6 @@ void OPexporter::Init(const OPchar* filename) {
 	}
 
 	HasAnimations = scene->HasAnimations();
-
 }
 
 void OPexporter::Export(const OPchar* output) {
@@ -226,7 +223,7 @@ void OPexporter::_setBoneData(aiMesh* mesh) {
 	OPfree(boneCounts);
 }
 
-void OPexporter::_writeMeshData(ofstream myFile) {
+void OPexporter::_writeMeshData(ofstream* myFile) {
 
 	ui32 offset = 0;
 
@@ -238,13 +235,13 @@ void OPexporter::_writeMeshData(ofstream myFile) {
 		}
 
 		// Mesh name
-		writeString(&myFile, mesh->mName.C_Str());
+		writeString(myFile, mesh->mName.C_Str());
 
 		// Total Vertices and Indices in Mesh
 		ui32 totalVertices = _getTotalVertices(mesh);
 		ui32 totalIndices = _getTotalIndices(mesh);
-		writeU32(&myFile, totalVertices);
-		writeU32(&myFile, totalIndices);
+		writeU32(myFile, totalVertices);
+		writeU32(myFile, totalIndices);
 
 
 		OPboundingBox3D boundingBox;
@@ -315,55 +312,55 @@ void OPexporter::_writeMeshData(ofstream myFile) {
 			for (ui32 k = 0; k < face.mNumIndices; k++) {
 
 				// Position
-				writeF32(&myFile, verts[k].x * scale);
-				writeF32(&myFile, verts[k].y * scale);
-				writeF32(&myFile, verts[k].z * scale);
+				writeF32(myFile, verts[k].x * scale);
+				writeF32(myFile, verts[k].y * scale);
+				writeF32(myFile, verts[k].z * scale);
 
 				// Normal
 				if (mesh->HasNormals() && features[Model_Normals]) {
-					writeF32(&myFile, normals[k].x);
-					writeF32(&myFile, normals[k].y);
-					writeF32(&myFile, normals[k].z);
+					writeF32(myFile, normals[k].x);
+					writeF32(myFile, normals[k].y);
+					writeF32(myFile, normals[k].z);
 				}
 
 				if (mesh->HasTangentsAndBitangents() && features[Model_Tangents]) {
-					writeF32(&myFile, tangents[k].x);
-					writeF32(&myFile, tangents[k].y);
-					writeF32(&myFile, tangents[k].z);
+					writeF32(myFile, tangents[k].x);
+					writeF32(myFile, tangents[k].y);
+					writeF32(myFile, tangents[k].z);
 				}
 
 				if (mesh->HasTangentsAndBitangents() && features[Model_Bitangents]) {
-					writeF32(&myFile, bitangents[k].x);
-					writeF32(&myFile, bitangents[k].y);
-					writeF32(&myFile, bitangents[k].z);
+					writeF32(myFile, bitangents[k].x);
+					writeF32(myFile, bitangents[k].y);
+					writeF32(myFile, bitangents[k].z);
 				}
 
 				if (mesh->HasTextureCoords(0) && features[Model_UVs]) {
-					writeF32(&myFile, uvs[k].x);
-					writeF32(&myFile, uvs[k].y);
+					writeF32(myFile, uvs[k].x);
+					writeF32(myFile, uvs[k].y);
 				}
 
 				if (mesh->HasBones() && features[Model_Bones]) {
 					// TODO
-					writeU16(&myFile, boneWeightIndex[k].bones[0]);
-					writeU16(&myFile, boneWeightIndex[k].bones[1]);
-					writeU16(&myFile, boneWeightIndex[k].bones[2]);
-					writeU16(&myFile, boneWeightIndex[k].bones[3]);
-					writeF32(&myFile, boneWeightIndex[k].weights[0]);
-					writeF32(&myFile, boneWeightIndex[k].weights[1]);
-					writeF32(&myFile, boneWeightIndex[k].weights[2]);
-					writeF32(&myFile, boneWeightIndex[k].weights[3]);
+					writeU16(myFile, boneWeightIndex[k].bones[0]);
+					writeU16(myFile, boneWeightIndex[k].bones[1]);
+					writeU16(myFile, boneWeightIndex[k].bones[2]);
+					writeU16(myFile, boneWeightIndex[k].bones[3]);
+					writeF32(myFile, boneWeightIndex[k].weights[0]);
+					writeF32(myFile, boneWeightIndex[k].weights[1]);
+					writeF32(myFile, boneWeightIndex[k].weights[2]);
+					writeF32(myFile, boneWeightIndex[k].weights[3]);
 				}
 
 				if (mesh->HasVertexColors(0) && features[Model_Colors]) {
-					writeF32(&myFile, colors[k].r);
-					writeF32(&myFile, colors[k].g);
-					writeF32(&myFile, colors[k].b);
+					writeF32(myFile, colors[k].r);
+					writeF32(myFile, colors[k].g);
+					writeF32(myFile, colors[k].b);
 				}
 				else if (features[Model_Colors]) {
-					writeF32(&myFile, 0);
-					writeF32(&myFile, 0);
-					writeF32(&myFile, 0);
+					writeF32(myFile, 0);
+					writeF32(myFile, 0);
+					writeF32(myFile, 0);
 				}
 			}
 		}
@@ -378,63 +375,63 @@ void OPexporter::_writeMeshData(ofstream myFile) {
 			if (indexSize == OPindexSize::INT) {
 				if (face.mNumIndices == 3) {
 					//OPlog("Triangle");
-					writeU32(&myFile, offset++);
-					writeU32(&myFile, offset++);
-					writeU32(&myFile, offset++);
+					writeU32(myFile, offset++);
+					writeU32(myFile, offset++);
+					writeU32(myFile, offset++);
 				}
 				else {
 					//OPlog("Quad");
-					writeU32(&myFile, offset + 0);
-					writeU32(&myFile, offset + 1);
-					writeU32(&myFile, offset + 2);
-					writeU32(&myFile, offset + 0);
-					writeU32(&myFile, offset + 2);
-					writeU32(&myFile, offset + 3);
+					writeU32(myFile, offset + 0);
+					writeU32(myFile, offset + 1);
+					writeU32(myFile, offset + 2);
+					writeU32(myFile, offset + 0);
+					writeU32(myFile, offset + 2);
+					writeU32(myFile, offset + 3);
 					offset += 4;
 				}
 			}
 			else {
 				if (face.mNumIndices == 3) {
 					//OPlog("Triangle");
-					writeU16(&myFile, offset++);
-					writeU16(&myFile, offset++);
-					writeU16(&myFile, offset++);
+					writeU16(myFile, offset++);
+					writeU16(myFile, offset++);
+					writeU16(myFile, offset++);
 				}
 				else {
 					//OPlog("Quad");
-					writeU16(&myFile, offset + 0);
-					writeU16(&myFile, offset + 1);
-					writeU16(&myFile, offset + 2);
-					writeU16(&myFile, offset + 0);
-					writeU16(&myFile, offset + 2);
-					writeU16(&myFile, offset + 3);
+					writeU16(myFile, offset + 0);
+					writeU16(myFile, offset + 1);
+					writeU16(myFile, offset + 2);
+					writeU16(myFile, offset + 0);
+					writeU16(myFile, offset + 2);
+					writeU16(myFile, offset + 3);
 					offset += 4;
 				}
 			}
 		}
 
-		writeF32(&myFile, boundingBox.min.x);
-		writeF32(&myFile, boundingBox.min.y);
-		writeF32(&myFile, boundingBox.min.z);
-		writeF32(&myFile, boundingBox.max.x);
-		writeF32(&myFile, boundingBox.max.y);
-		writeF32(&myFile, boundingBox.max.z);
+		writeF32(myFile, boundingBox.min.x);
+		writeF32(myFile, boundingBox.min.y);
+		writeF32(myFile, boundingBox.min.z);
+		writeF32(myFile, boundingBox.max.x);
+		writeF32(myFile, boundingBox.max.y);
+		writeF32(myFile, boundingBox.max.z);
 
 
 		// Write Meta Data
 
-		if (model != NULL) {
-			writeU32(&myFile, model->meshes[i].meshMeta->count);
-			for (ui32 j = 0; j < model->meshes[i].meshMeta->count; j++) {
-				writeU32(&myFile, (ui32)model->meshes[i].meshMeta->metaType[j]);
-				OPchar* test = model->meshes[i].meshMeta->data[j]->String();
-				writeString(&myFile, test);
-				//write(&myFile, model->meshes[i].meshMeta->data->Data, model->meshes[i].meshMeta->data->Length);
-			}
-		}
-		else {
-			writeU32(&myFile, 0);
-		}
+		//if (model != NULL) {
+		//	writeU32(myFile, model->meshes[i].meshMeta->count);
+		//	for (ui32 j = 0; j < model->meshes[i].meshMeta->count; j++) {
+		//		writeU32(myFile, (ui32)model->meshes[i].meshMeta->metaType[j]);
+		//		OPchar* test = model->meshes[i].meshMeta->data[j]->String();
+		//		writeString(myFile, test);
+		//		//write(&myFile, model->meshes[i].meshMeta->data->Data, model->meshes[i].meshMeta->data->Length);
+		//	}
+		//}
+		//else {
+			writeU32(myFile, 0);
+		//}
 
 	}
 
@@ -484,7 +481,7 @@ void OPexporter::_write(const OPchar* outputFinal) {
 	indexSize = OPindexSize::INT;
 	writeU8(&myFile, (ui8)indexSize);
 
-	_writeMeshData();
+	_writeMeshData(&myFile);
 
 	myFile.close();
 

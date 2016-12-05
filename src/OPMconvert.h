@@ -1,6 +1,8 @@
 #pragma once
 
 #include "./OPengine.h"
+#include "./OPassimp.h"
+#include "Utils.h"
 
 
 enum ModelFeatures {
@@ -38,7 +40,6 @@ struct OPexporter {
 	OPchar** splitName;
 
 	f32 scale;
-	OPmodel* model;
 
 	const OPchar* path;
 	OPchar* output;
@@ -72,7 +73,7 @@ struct OPexporter {
 	ui32 _getTotalIndices();
 	ui32 _getTotalVertices(aiMesh* mesh);
 	ui32 _getTotalIndices(aiMesh* mesh);
-	void _writeMeshData(ofstream myFile);
+	void _writeMeshData(ofstream* myFile);
 	void _setBoneData(aiMesh* mesh);
 };
 

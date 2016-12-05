@@ -6,9 +6,11 @@
 
 #include "OPimgui.h"
 
+void DropCallback(OPuint count, const OPchar** filenames);
+
+
 
 OPscene scene;
-//OPrendererForward* renderer;
 OPrendererFullForward* fullForwardRenderer;
 
 OPmaterialPBR materialPBR;
@@ -20,7 +22,6 @@ OPmaterialInstance** materialInstancesArr = NULL;
 OPmaterialPBRInstance** materialPBRInstancesArr = NULL;
 OPmodel model;
 OPrendererEntity* entity;
-OPcamFreeFlight camera;
 OPfloat Rotation = 0;
 OPfloat Scale = 1.0f;
 OPboundingBox3D* bounds = NULL;
@@ -56,9 +57,11 @@ OPmodelMeta metaData[1] = {
 
 OPmeshMeta** meshMeta;
 
-bool LoadMeshFromFile(const OPchar* filename) {
+bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	const OPchar* ext = NULL;
+
 	// Load up an fbx with assimp
+	exporter.Init(filename);
 	OPmodel* modelTemp = (OPmodel*)OPCMAN.LoadFromFile(filename);
 	if (modelTemp == NULL) return false;
 	model = *modelTemp;
@@ -187,7 +190,150 @@ int texInd = 0;
 #include <fstream>
 using namespace std;
 
-void DropCallback(OPuint count, const OPchar** filenames) {
+void ExporterState::Init() {
+	OPimguiInit(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE, true);
+
+	mainWindow.SetDropCallback(DropCallback);
+
+	const OPchar* envImages[6] = {
+		"Textures/Default_Albedo.png",
+		"Textures/Default_Albedo.png",
+		"Textures/Default_Albedo.png",
+		"Textures/Default_Albedo.png",
+		"Textures/Default_Albedo.png",
+		"Textures/Default_Albedo.png"
+	};
+	environment.Init(envImages);
+
+	fullForwardRenderer = OPrendererFullForward::Create();
+	scene.Init(&fullForwardRenderer->rendererRoot, 1000, 50);
+
+	camera.Init(1.0f, 1.0f, OPvec3(0, 5, 5));
+	scene.camera = &camera.Camera;
+
+	model = *(OPmodel*)OPCMAN.LoadGet("box.opm");
+	entity = scene.Add(&model, OPrendererEntityDesc(false));
+}
+
+OPint ExporterState::Update(OPtimer* timer) {
+	camera.Update(timer);
+	entity->world.SetRotY(Rotation / 200.0f)->Scl(Scale);
+	return false;
+}
+
+void ExporterState::Render(OPfloat delta) {
+
+	OPrenderClear(0.2f, 0.2f, 0.2f, 1);
+	OPrenderCullMode(OPcullFace::BACK);
+	OPrenderCull(false);
+
+	scene.Render(delta);
+
+
+	// Render the GUI
+
+	OPimguiNewFrame();
+
+	bool openDebugInfo = true;// texFile != NULL || meshFile != NULL;
+	ImGui::SetNextWindowPos(ImVec2(10, 10));
+	ImGui::Begin("Overlay", &openDebugInfo, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WindowWidth - 20 - 200, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+	if (meshFile != NULL) ImGui::Text("Model: %s", meshFile); else  ImGui::Text("Model: ");
+	if (texFile != NULL) ImGui::Text("Texture: %s", texFile); else  ImGui::Text("Texture: ");
+
+	ImGui::SliderFloat("Scale", &Scale, 0.001f, 4.0f);
+
+	ImGui::End();
+
+	bool alwaysShow = true;
+	ImGui::SetNextWindowPos(ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width - 20 - 180, 10));
+	ImGui::Begin("Overlay2", &alwaysShow, ImVec2(190, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	ImGui::Text("Scale");
+	if (ImGui::Button("Default")) {
+		Scale = 1.0f;
+	}
+	if (ImGui::Button("CM -> Meters")) {
+		Scale = 0.01f;
+	}
+	ImGui::End();
+
+	ImGui::SetNextWindowPos(ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width - 20 - 240, OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height - 110));
+	ImGui::Begin("OverlayExport", &alwaysShow, ImVec2(250, 100), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	ImGui::InputText("Output", outName, 255);
+	if (ImGui::Button("Export")) {
+		if (meshFile != NULL) {
+			OPchar* output = OPstringCreateMerged(outputRoot, outName);
+			exporter.Export(output);
+			//ExportOPM(meshFile, output, Scale, &model,
+			//	featureNormals,
+			//	featureUVs,
+			//	featureTangents,
+			//	featureBiTangents,
+			//	featureColors,
+			//	featureBones,
+			//	exportSkeleton,
+			//	exportAnimations,
+			//	SplittersIndex,
+			//	SplittersStart,
+			//	SplittersEnd,
+			//	SplittersName);
+			OPfree(output);
+		}
+	}
+
+	ImGui::Checkbox("Auto-Export on drop", &autoExport);
+	ImGui::End();
+
+	ImGui::SetNextWindowPos(ImVec2(10, 100));
+	ImGui::Begin("OverlayFeatures", &alwaysShow, ImVec2(200, 200), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+	ImGui::Checkbox("Normals", &featureNormals);
+	ImGui::Checkbox("UVs", &featureUVs);
+	ImGui::Checkbox("Tangents", &featureTangents);
+	ImGui::Checkbox("BiTangents", &featureBiTangents);
+	ImGui::Checkbox("Colors", &featureColors);
+	ImGui::Checkbox("Bones", &featureBones);
+	ImGui::Checkbox("Skeleton", &exportSkeleton);
+	ImGui::Checkbox("Animations", &exportAnimations);
+
+	if (materialInstancesArr != NULL) {
+		ImGui::SliderInt("Mesh", &texInd, 0, model.meshCount);
+	}
+	ImGui::End();
+	//ImGui::ShowTestWindow();
+
+	if (totalAnimationTracks > 0) {
+
+		ImGui::SetNextWindowPos(ImVec2(10, 310));
+		ImGui::Begin("OverlayAnimations", &alwaysShow, ImVec2(200, 20 * totalAnimationTracks), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+		for (ui32 i = 0; i < totalAnimationTracks; i++) {
+			ImGui::Text("%s : %d frames", AnimationTracks[i], (int)AnimationDurations[i]);
+		}
+		ImGui::End();
+
+		if (SplittersIndex > 0) {
+			ImGui::SetNextWindowPos(ImVec2(10, 330 + 20 * totalAnimationTracks));
+			ImGui::Begin("OverlaySplitters", &alwaysShow, ImVec2(200, 20 * SplittersIndex), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+			for (ui32 i = 0; i < SplittersIndex; i++) {
+				ImGui::Text("%s : %d - %d", SplittersName[i], SplittersStart[i], SplittersEnd[i]);
+			}
+			ImGui::End();
+		}
+	}
+
+	ImGui::Render();
+
+	OPrenderPresent();
+}
+
+OPint ExporterState::Exit() {
+	return 0;
+}
+
+void ExporterState::_drop(OPuint count, const OPchar** filenames) {
+
 	const OPchar* ext = NULL;
 
 	// Process any textures first
@@ -202,10 +348,7 @@ void DropCallback(OPuint count, const OPchar** filenames) {
 			materialInstance->SetAlbedoMap(tex);
 
 			if (materialInstancesArr != NULL) {
-
-				//for (ui32 i = 0; i < model.meshCount; i++) {
-					materialPBRInstancesArr[texInd]->SetAlbedoMap(tex);
-				//}
+				materialPBRInstancesArr[texInd]->SetAlbedoMap(tex);
 			}
 
 			// Set Meta
@@ -259,57 +402,62 @@ void DropCallback(OPuint count, const OPchar** filenames) {
 		if (ext == NULL) continue;
 
 		if (OPstringEquals(ext, ".fbx")) {
-			if (LoadMeshFromFile(filenames[i])) {
+
+			if (_loadMeshFromFile(filenames[i])) {
 				if (OPvec3Len(bounds->max - bounds->min) > 80) {
 					Scale = 0.01f;
 				}
 				totalAnimationTracks = GetAvailableTracks(filenames[i], AnimationTracks, AnimationDurations, 10);
 				if (autoExport) {
 					OPchar* output = OPstringCreateMerged(outputRoot, outName);
-					ExportOPM(meshFile, output, Scale, &model,
-						featureNormals,
-						featureUVs,
-						featureTangents,
-						featureBiTangents,
-						featureColors,
-						featureBones,
-						exportSkeleton,
-						exportAnimations,
-						SplittersIndex,
-						SplittersStart,
-						SplittersEnd,
-						SplittersName);
+
+					exporter.Export(output);
+
+					//ExportOPM(meshFile, output, Scale, &model,
+					//	featureNormals,
+					//	featureUVs,
+					//	featureTangents,
+					//	featureBiTangents,
+					//	featureColors,
+					//	featureBones,
+					//	exportSkeleton,
+					//	exportAnimations,
+					//	SplittersIndex,
+					//	SplittersStart,
+					//	SplittersEnd,
+					//	SplittersName);
 					OPfree(output);
 				}
 			}
 		}
 		else if (OPstringEquals(ext, ".obj")) {
-			if (LoadMeshFromFile(filenames[i])) {
+			if (_loadMeshFromFile(filenames[i])) {
 				if (OPvec3Len(bounds->max - bounds->min) > 80) {
 					Scale = 0.01f;
 				}
 				if (autoExport) {
 					OPchar* output = OPstringCreateMerged(outputRoot, outName);
-					ExportOPM(meshFile, output, Scale, &model,
-						featureNormals,
-						featureUVs,
-						featureTangents,
-						featureBiTangents,
-						featureColors,
-						featureBones,
-						exportSkeleton,
-						exportAnimations,
-						SplittersIndex,
-						SplittersStart,
-						SplittersEnd,
-						SplittersName);
+					exporter.Export(output);
+					//ExportOPM(meshFile, output, Scale, &model,
+					//	featureNormals,
+					//	featureUVs,
+					//	featureTangents,
+					//	featureBiTangents,
+					//	featureColors,
+					//	featureBones,
+					//	exportSkeleton,
+					//	exportAnimations,
+					//	SplittersIndex,
+					//	SplittersStart,
+					//	SplittersEnd,
+					//	SplittersName);
 					OPfree(output);
 				}
 				totalAnimationTracks = 0;
 			}
 		}
-		else if(OPstringEquals(ext, ".opm")) {
-			LoadMeshFromFile(filenames[i]);
+		else if (OPstringEquals(ext, ".opm")) {
+			_loadMeshFromFile(filenames[i]);
 			Scale = 1.0f;
 			bounds = NULL;
 			totalAnimationTracks = 0;
@@ -317,146 +465,18 @@ void DropCallback(OPuint count, const OPchar** filenames) {
 	}
 }
 
-void ExampleStateInit(OPgameState* last) {
-	OPimguiInit(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE, true);
 
-	mainWindow.SetDropCallback(DropCallback);
 
-	const OPchar* envImages[6] = {
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png"
-	};
-	environment.Init(envImages);
+// Hookups for the game state
+ExporterState exporterState;
+void ExampleStateInit(OPgameState* last) { exporterState.Init(); }
+OPint ExampleStateUpdate(OPtimer* time) { return exporterState.Update(time); }
+void ExampleStateRender(OPfloat delta) { exporterState.Render(delta); }
+OPint ExampleStateExit(OPgameState* next) { return exporterState.Exit(); }
 
-	fullForwardRenderer = OPrendererFullForward::Create();
-	scene.Init(&fullForwardRenderer->rendererRoot, 1000, 50);
-
-	camera.Init(1.0f, 1.0f, OPvec3(0, 5, 5));
-	scene.camera = &camera.Camera;
-
-	model = *(OPmodel*)OPCMAN.LoadGet("box.opm");
-	entity = scene.Add(&model, OPrendererEntityDesc(false));
+void DropCallback(OPuint count, const OPchar** filenames) {
+	exporterState._drop(count, filenames);
 }
-
-
-OPint ExampleStateUpdate(OPtimer* time) {
-	camera.Update(time);
-	entity->world.SetRotY(Rotation / 200.0f)->Scl(Scale);
-	return false;
-}
-
-void ExampleStateRender(OPfloat delta) {
-	OPrenderClear(0.2f, 0.2f, 0.2f, 1);
-	OPrenderCullMode(OPcullFace::BACK);
-	OPrenderCull(false);
-
-	scene.Render(delta);
-
-    // Render the GUI
-
-	OPimguiNewFrame();
-
-	bool openDebugInfo = true;// texFile != NULL || meshFile != NULL;
-	ImGui::SetNextWindowPos(ImVec2(10, 10));
-	ImGui::Begin("Overlay", &openDebugInfo, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WindowWidth - 20 - 200, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-	if (meshFile != NULL) ImGui::Text("Model: %s", meshFile); else  ImGui::Text("Model: ");
-	if (texFile != NULL) ImGui::Text("Texture: %s", texFile); else  ImGui::Text("Texture: ");
-
-	ImGui::SliderFloat("Scale", &Scale, 0.001f, 4.0f);
-
-	ImGui::End();
-
-	bool alwaysShow = true;
-	ImGui::SetNextWindowPos(ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width - 20 - 180, 10));
-	ImGui::Begin("Overlay2", &alwaysShow, ImVec2(190, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("Scale");
-	if (ImGui::Button("Default")) {
-		Scale = 1.0f;
-	}
-	if (ImGui::Button("CM -> Meters")) {
-		Scale = 0.01f;
-	}
-	ImGui::End();
-
-	ImGui::SetNextWindowPos(ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width - 20 - 240, OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height - 110));
-	ImGui::Begin("OverlayExport", &alwaysShow, ImVec2(250, 100), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::InputText("Output", outName, 255);
-	if (ImGui::Button("Export")) {
-		if (meshFile != NULL) {
-			OPchar* output = OPstringCreateMerged(outputRoot, outName);
-			ExportOPM(meshFile, output, Scale, &model,
-				featureNormals,
-				featureUVs,
-				featureTangents,
-				featureBiTangents,
-				featureColors,
-				featureBones,
-				exportSkeleton,
-				exportAnimations,
-				SplittersIndex,
-				SplittersStart,
-				SplittersEnd,
-				SplittersName);
-			OPfree(output);
-		}
-	}
-
-	ImGui::Checkbox("Auto-Export on drop", &autoExport);
-	ImGui::End();
-
-	ImGui::SetNextWindowPos(ImVec2(10, 100));
-	ImGui::Begin("OverlayFeatures", &alwaysShow, ImVec2(200, 200), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-	ImGui::Checkbox("Normals", &featureNormals);
-	ImGui::Checkbox("UVs", &featureUVs);
-	ImGui::Checkbox("Tangents", &featureTangents);
-	ImGui::Checkbox("BiTangents", &featureBiTangents);
-	ImGui::Checkbox("Colors", &featureColors);
-	ImGui::Checkbox("Bones", &featureBones);
-	ImGui::Checkbox("Skeleton", &exportSkeleton);
-	ImGui::Checkbox("Animations", &exportAnimations);
-
-	if (materialInstancesArr != NULL) {
-		ImGui::SliderInt("Mesh", &texInd, 0, model.meshCount);
-	}
-	ImGui::End();
-	//ImGui::ShowTestWindow();
-
-	if (totalAnimationTracks > 0) {
-
-		ImGui::SetNextWindowPos(ImVec2(10, 310));
-		ImGui::Begin("OverlayAnimations", &alwaysShow, ImVec2(200, 20 * totalAnimationTracks), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-		for (ui32 i = 0; i < totalAnimationTracks; i++) {
-			ImGui::Text("%s : %d frames", AnimationTracks[i], (int)AnimationDurations[i]);
-		}
-		ImGui::End();
-
-		if (SplittersIndex > 0) {
-			ImGui::SetNextWindowPos(ImVec2(10, 330 + 20 * totalAnimationTracks));
-			ImGui::Begin("OverlaySplitters", &alwaysShow, ImVec2(200, 20 * SplittersIndex), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-			for (ui32 i = 0; i < SplittersIndex; i++) {
-				ImGui::Text("%s : %d - %d", SplittersName[i], SplittersStart[i], SplittersEnd[i]);
-			}
-			ImGui::End();
-		}
-	}
-
-	ImGui::Render();
-
-	OPrenderPresent();
-}
-
-OPint ExampleStateExit(OPgameState* next) {
-	return 0;
-}
-
 
 OPgameState GS_EXAMPLE = {
 	ExampleStateInit,
