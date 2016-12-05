@@ -4,11 +4,13 @@
 #ifdef ADDON_assimp
 #include "./OPassimp.h"
 #endif
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <iostream>
 #include <fstream>
 using namespace std;
- 
+
 void write(ofstream* stream, void* data, i32 size) {
 	stream->write((char*)data, size);
 }
@@ -191,25 +193,26 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
 		aiMesh* mesh = scene->mMeshes[i];
 
+        const OPchar* mName = mesh->mName.C_Str();
 		ui32 stride = 0;
 		if (features[Model_Normals] && !mesh->HasNormals()) {
-			OPlogErr("Mesh %d didn't have 'Normals' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'Normals' to add: '%s'", i, mName);
 			features[Model_Normals] = 0;
 		}
 		if (features[Model_UVs] && !mesh->HasTextureCoords(0)) {
-			OPlogErr("Mesh %d didn't have 'UVs' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'UVs' to add: '%s'", i, mName);
 			features[Model_UVs] = 0;
 		}
 		if (features[Model_Tangents] && !mesh->HasTangentsAndBitangents()) {
-			OPlogErr("Mesh %d didn't have 'Tangents' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'Tangents' to add: '%s'", i, mName);
 			features[Model_Tangents] = 0;
 		}
 		if (features[Model_Bitangents] && !mesh->HasTangentsAndBitangents()) {
-			OPlogErr("Mesh %d didn't have 'Bitangents' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'Bitangents' to add: '%s'", i, mName);
 			features[Model_Bitangents] = 0;
 		}
 		if (features[Model_Bones] && !mesh->HasBones()) {
-			OPlogErr("Mesh %d didn't have 'Bones' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'Bones' to add: '%s'", i, mName);
 			//features[Model_Bones] = 0;
 		}
 	}
@@ -535,7 +538,8 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 		for (ui32 i = 0; i < scene->mNumMeshes; i++) {
 			const aiMesh* mesh = scene->mMeshes[i];
 			char buffer[20];
-			OPchar* skelFileNum = OPstringCreateMerged(outputFinal, itoa(i, buffer, 10));
+            sprintf(buffer, "%d", i);
+			OPchar* skelFileNum = OPstringCreateMerged(outputFinal, buffer);
 			OPchar* skeletonOutput = OPstringCreateMerged(skelFileNum, ".skel");
 			ofstream skelFile(outputFinal, ios::binary);
 
