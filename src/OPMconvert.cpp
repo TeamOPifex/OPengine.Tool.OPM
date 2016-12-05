@@ -2,62 +2,15 @@
 #include "./OPassimp.h"
 #include "./Data/include/OPstring.h"
 #include "./Human/include/Rendering/OPMvertex.h"
+#include "Utils.h"
 
-#include <iostream>
-#include <fstream>
-using namespace std;
+void OPexporter::Init(const OPchar* filename) {
+	path = filename;
 
-void write(ofstream* stream, void* data, i32 size) {
-	stream->write((char*)data, size);
-}
-void writeU8(ofstream* stream, ui8 val) {
-	write(stream, &val, sizeof(ui8));
-}
-void writeI8(ofstream* stream, i8 val) {
-	write(stream, &val, sizeof(i8));
-}
-void writeF32(ofstream* stream, f32 val) {
-	write(stream, &val, sizeof(f32));
-}
-void writeI16(ofstream* stream, i16 val) {
-	write(stream, &val, sizeof(i16));
-}
-void writeU16(ofstream* stream, ui16 val) {
-	write(stream, &val, sizeof(ui16));
-}
-void writeI32(ofstream* stream, i32 val) {
-	write(stream, &val, sizeof(i32));
-}
-void writeU32(ofstream* stream, ui32 val) {
-	write(stream, &val, sizeof(ui32));
-}
-void writeString(ofstream* stream, const OPchar* val) {
-	ui32 len = strlen(val);
-	writeU32(stream, len);
-	if (len == 0) return;
-	write(stream, (void*)val, len * sizeof(OPchar));
-}
-
-enum ModelFeatures {
-	Model_Positions = 0,
-	Model_Normals = 1,
-	Model_UVs = 2,
-	Model_Colors = 3,
-	Model_Indices = 4,
-	Model_Tangents = 5,
-	Model_Bones = 6,
-	Model_Skinning = 7,
-	Model_Animations = 8,
-	Model_Skeletons = 9,
-	Model_Meta = 10,
-	Model_Bitangents = 11,
-	MAX_FEATURES
-};
-
-ui32 GetAvailableTracks(const OPchar* filename, OPchar** buff, double* durations, ui32 max) {
-	Assimp::Importer importer;
-
-	const aiScene* scene = importer.ReadFile(filename,
+	// And have it read the given file with some example postprocessing
+	// Usually - if speed is not the most important aspect for you - you'll 
+	// propably to request more postprocessing than we do in this example.
+	scene = importer.ReadFile(filename,
 		aiProcess_CalcTangentSpace |
 		aiProcess_Triangulate |
 		aiProcess_JoinIdenticalVertices |
@@ -70,116 +23,56 @@ ui32 GetAvailableTracks(const OPchar* filename, OPchar** buff, double* durations
 	if (!scene)
 	{
 		OPlogErr("Failed");
-		return 0;
-	}
-
-	if (!scene->HasAnimations()) {
-		return 0;
-	}
-
-	ui32 i = 0;
-	for (; i < scene->mNumAnimations && i < max; i++) {
-		buff[i] = OPstringCopy(scene->mAnimations[i]->mName.C_Str());
-		durations[i] = scene->mAnimations[i]->mDuration;
-	}
-
-	return i;
-}
-
-struct BoneWeight {
-	OPfloat weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	i32 bones[4] = { 0, 0, 0, 0 };
-};
-
-void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model,
-	bool featureNormals,
-	bool featureUVs,
-	bool featureTangents,
-	bool featureBiTangents,
-	bool featureColors,
-	bool featureBones,
-	bool exportSkeleton,
-	bool exportAnimations,
-	ui32 splitCount,
-	ui32* splitStart,
-	ui32* splitEnd,
-	OPchar** splitName) {
-
-	Assimp::Importer importer;
-	// And have it read the given file with some example postprocessing
-	// Usually - if speed is not the most important aspect for you - you'll 
-	// propably to request more postprocessing than we do in this example.
-	const aiScene* scene = importer.ReadFile(filename,
-		aiProcess_CalcTangentSpace |
-		aiProcess_Triangulate |
-		aiProcess_JoinIdenticalVertices |
-		aiProcess_SortByPType |
-		aiProcess_OptimizeMeshes |
-		aiProcess_OptimizeGraph
-	); 
-	//|
-	//	aiProcess_OptimizeMeshes |
-	//	aiProcess_OptimizeGraph
-
-	// If the import failed, report it
-	if (!scene)
-	{
-		OPlogErr("Failed");
 		return;
 	}
 
-	if (scene->HasAnimations()) {
-		OPlogInfo("Model has animaitons");
-	}
+	HasAnimations = scene->HasAnimations();
 
+}
+
+void OPexporter::Export(const OPchar* output) {
+	OPchar* out;
 	if (output == NULL) {
-		output = OPstringCopy(filename);
+		out = OPstringCopy(path);
+	}
+	else {
+		out = OPstringCopy(output);
 	}
 
-	OPstringToLower(output);
-	OPint contains = OPstringContains(output, ".opm");
+
+	OPstringToLower(out);
+	OPint contains = OPstringContains(out, ".opm");
 	if (contains > 0) {
-		output[contains] = NULL;
+		out[contains] = NULL;
 	}
 	// Now we can access the file's contents
-	OPchar* outputFinal = OPstringCreateMerged(output, ".opm");
-	ofstream myFile(outputFinal, ios::binary);
+	OPchar* outputFinal = OPstringCreateMerged(out, ".opm");
 
-	// OPM File Format Version
-	writeU16(&myFile, 3);
+	_write(outputFinal);
 
-	writeString(&myFile, scene->mRootNode->mName.C_Str());
-	OPlogInfo("MODEL: %s", scene->mRootNode->mName.C_Str());
+	OPfree(out);
+}
 
+void OPexporter::Export() {
+	Export(NULL);
+}
 
-	ui32 features[MAX_FEATURES];
+void OPexporter::_setFeatures() {
 	OPbzero(features, sizeof(ui32) * MAX_FEATURES);
 	features[Model_Positions] = 1;
-	features[Model_Normals] = featureNormals;
-	features[Model_UVs] = featureUVs;
-	features[Model_Tangents] = featureTangents;
-	features[Model_Bitangents] = featureBiTangents;
+	features[Model_Normals] = Feature_Normals;
+	features[Model_UVs] = Feature_UVs;
+	features[Model_Tangents] = Feature_Tangents;
+	features[Model_Bitangents] = Feature_BiTangents;
 	features[Model_Indices] = 1;
-	features[Model_Colors] = featureColors;
-	features[Model_Bones] = featureBones;
-	features[Model_Skinning] = featureBones;
-	features[Model_Skeletons] = exportSkeleton;
-	features[Model_Animations] = exportAnimations;
+	features[Model_Colors] = Feature_Colors;
+	features[Model_Bones] = Feature_Bones;
+	features[Model_Skinning] = Feature_Bones;
+	features[Model_Skeletons] = Export_Skeleton;
+	features[Model_Animations] = Export_Animations;
 	features[Model_Meta] = 0;
 
-	// Number of meshes
-	ui32 meshCount = 0;
-
-	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
-		aiMesh* mesh = scene->mMeshes[i];
-		if (features[Model_Bones] && !mesh->HasBones()) {
-			continue;
-		}
-		meshCount++;
-	}
-	writeU32(&myFile, meshCount);
-
-
+	
 	// All of the meshes must have the same layout
 	// We'll turn features off if we have to
 	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
@@ -207,7 +100,9 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 			//features[Model_Bones] = 0;
 		}
 	}
+}
 
+ui32 OPexporter::_getFeaturesFlag() {
 	ui32 featureFlags = 0;
 	if (features[Model_Positions]) featureFlags += 0x01;
 	if (features[Model_Normals]) featureFlags += 0x02;
@@ -221,18 +116,11 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 	if (features[Model_Animations]) featureFlags += 0x80;
 	if (features[Model_Meta]) featureFlags += 0x200;
 
-	// Features in the OPM
-	writeU32(&myFile, featureFlags);
+	return featureFlags;
+}
 
-
-	// Vertex Mode
-	// 1 == Vertex Stride ( Pos/Norm/Uv )[]
-	// 2 == Vertex Arrays ( Pos )[] ( Norm )[] ( Uv )[]
-	writeU16(&myFile, 1);
-
-
+ui32 OPexporter::_getTotalVertices() {
 	ui32 totalVerticesEntireModel = 0;
-	ui32 totalIndicesEntireModel = 0;
 
 	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
 		aiMesh* mesh = scene->mMeshes[i];
@@ -243,6 +131,23 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 		for (ui32 j = 0; j < mesh->mNumFaces; j++) {
 			aiFace face = mesh->mFaces[j];
 			totalVerticesEntireModel += face.mNumIndices;
+		}
+	}
+
+	return totalVerticesEntireModel;
+}
+
+ui32 OPexporter::_getTotalIndices() {
+	ui32 totalIndicesEntireModel = 0;
+
+	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
+		aiMesh* mesh = scene->mMeshes[i];
+		if (features[Model_Bones] && !mesh->HasBones()) {
+			continue;
+		}
+
+		for (ui32 j = 0; j < mesh->mNumFaces; j++) {
+			aiFace face = mesh->mFaces[j];
 			if (face.mNumIndices == 3) {
 				totalIndicesEntireModel += 3;
 			}
@@ -252,45 +157,102 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 		}
 	}
 
-	writeU32(&myFile, totalVerticesEntireModel);
-	writeU32(&myFile, totalIndicesEntireModel);
+	return totalIndicesEntireModel;
+}
 
-	OPindexSize indexSize = OPindexSize::INT;
-	writeU8(&myFile, (ui8)indexSize);
+ui32 OPexporter::_getTotalVertices(aiMesh* mesh) {
+	ui32 totalVertices = 0;
+	for (ui32 j = 0; j < mesh->mNumFaces; j++) {
+		aiFace face = mesh->mFaces[j];
+		totalVertices += face.mNumIndices;
+	}
+	return totalVertices;
+}
+
+ui32 OPexporter::_getTotalIndices(aiMesh* mesh) {
+	ui32 totalIndices = 0;
+	for (ui32 j = 0; j < mesh->mNumFaces; j++) {
+		aiFace face = mesh->mFaces[j];
+		if (face.mNumIndices == 3) {
+			totalIndices += 3;
+		}
+		else if (face.mNumIndices == 4) {
+			totalIndices += 6;
+		}
+	}
+	return totalIndices;
+}
+
+
+void OPexporter::_setBoneData(aiMesh* mesh) {
+	i32* boneCounts = NULL;
+	boneCounts = (i32*)OPallocZero(sizeof(i32) * mesh->mNumVertices);
+	for (ui32 boneInd = 0; boneInd < mesh->mNumBones; boneInd++) {
+		const aiBone* bone = mesh->mBones[boneInd];
+		for (int boneWeightInd = 0; boneWeightInd < bone->mNumWeights; boneWeightInd++) {
+			const aiVertexWeight* weight = &bone->mWeights[boneWeightInd];
+			boneCounts[weight->mVertexId]++;
+		}
+	}
+
+	ui32 maxBones = 0;
+	for (ui32 maxBoneInd = 0; maxBoneInd < mesh->mNumVertices; maxBoneInd++) {
+		if (maxBones < boneCounts[maxBoneInd]) {
+			maxBones = boneCounts[maxBoneInd];
+		}
+	}
+	for (ui32 boneCountInd = 0; boneCountInd < mesh->mNumVertices; boneCountInd++) {
+		boneCounts[boneCountInd] = 0;
+	}
+
+	// maxBones is now the largest number of bones per vertex
+	if (maxBones > 4) {
+		OPlogErr("Can't handle more than 4 weights right now");
+		return;
+	}
+
+	boneWeights = (OPfloat*)OPallocZero(sizeof(OPfloat) * mesh->mNumVertices * 4);
+	boneIndices = (i32*)OPallocZero(sizeof(i32) * mesh->mNumVertices * 4);
+	for (ui32 boneInd = 0; boneInd < mesh->mNumBones; boneInd++) {
+		const aiBone* bone = mesh->mBones[boneInd];
+		for (int boneWeightInd = 0; boneWeightInd < bone->mNumWeights; boneWeightInd++) {
+			const aiVertexWeight* weight = &bone->mWeights[boneWeightInd];
+			ui32 offset = boneCounts[weight->mVertexId]++;
+			boneWeights[(weight->mVertexId * 4) + offset] = weight->mWeight;
+			boneIndices[(weight->mVertexId * 4) + offset] = boneInd;
+		}
+	}
+
+	OPfree(boneCounts);
+}
+
+void OPexporter::_writeMeshData(ofstream myFile) {
 
 	ui32 offset = 0;
+
 	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
 		aiMesh* mesh = scene->mMeshes[i];
 
 		if (features[Model_Bones] && !mesh->HasBones()) {
 			continue;
 		}
-				
+
+		// Mesh name
 		writeString(&myFile, mesh->mName.C_Str());
 
-		ui32 totalVertices = 0;
-		ui32 totalIndices = 0;
-		for (ui32 j = 0; j < mesh->mNumFaces; j++) {
-			aiFace face = mesh->mFaces[j];
-			totalVertices += face.mNumIndices;
-			if (face.mNumIndices == 3) {
-				totalIndices += 3;
-			}
-			else if (face.mNumIndices == 4) {
-				totalIndices += 6;
-			}
-		}
-
-		OPlogInfo("Mesh Verts %d | %d", i, totalVertices);
+		// Total Vertices and Indices in Mesh
+		ui32 totalVertices = _getTotalVertices(mesh);
+		ui32 totalIndices = _getTotalIndices(mesh);
 		writeU32(&myFile, totalVertices);
 		writeU32(&myFile, totalIndices);
 
+
 		OPboundingBox3D boundingBox;
 
-		//ui16* indData = (ui16*)OPalloc(sizeof(ui16) * totalIndices);
-		//ui16 offset = 0;
 
-
+		if (mesh->HasBones() && Feature_Bones) {
+			_setBoneData(mesh);
+		}
 
 		for (ui32 j = 0; j < mesh->mNumFaces; j++) {
 			aiFace face = mesh->mFaces[j];
@@ -299,62 +261,13 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 				continue;
 			}
 
-			OPfloat* allWeights = NULL;
-			i32* allBoneIndexes = NULL;
-			if (mesh->HasBones() && featureBones) {
-
-				i32* boneCounts = NULL;
-				boneCounts = (i32*)OPallocZero(sizeof(i32) * mesh->mNumVertices);
-				for (ui32 boneInd = 0; boneInd < mesh->mNumBones; boneInd++) {
-					const aiBone* bone = mesh->mBones[boneInd];
-					for (int boneWeightInd = 0; boneWeightInd < bone->mNumWeights; boneWeightInd++) {
-						const aiVertexWeight* weight = &bone->mWeights[boneWeightInd];
-						boneCounts[weight->mVertexId]++;
-					}
-				}
-
-				ui32 maxBones = 0;
-				for (ui32 maxBoneInd = 0; maxBoneInd < mesh->mNumVertices; maxBoneInd++) {
-					if (maxBones < boneCounts[maxBoneInd]) {
-						maxBones = boneCounts[maxBoneInd];
-					}
-				}
-				for (ui32 boneCountInd = 0; boneCountInd < mesh->mNumVertices; boneCountInd++) {
-					boneCounts[boneCountInd] = 0;
-				}
-
-				// maxBones is now the largest number of bones per vertex
-
-				if (maxBones > 4) {
-					OPlogErr("Can't handle more than 4 weights right now");
-					return;
-				}
-
-
-				allWeights = (OPfloat*)OPallocZero(sizeof(OPfloat) * mesh->mNumVertices * 4);
-				allBoneIndexes = (i32*)OPallocZero(sizeof(i32) * mesh->mNumVertices * 4);
-				for (ui32 boneInd = 0; boneInd < mesh->mNumBones; boneInd++) {
-					const aiBone* bone = mesh->mBones[boneInd];
-					for (int boneWeightInd = 0; boneWeightInd < bone->mNumWeights; boneWeightInd++) {
-						const aiVertexWeight* weight = &bone->mWeights[boneWeightInd];
-						ui32 offset = boneCounts[weight->mVertexId]++;
-						allWeights[(weight->mVertexId * 4) + offset] = weight->mWeight;
-						allBoneIndexes[(weight->mVertexId * 4) + offset] = boneInd;
-					}
-				}
-
-				OPfree(boneCounts);
-
-			}
-
-
 			aiVector3D verts[4];
 			aiVector3D normals[4];
 			aiVector3D uvs[4];
 			aiColor4D colors[4];
 			aiVector3D bitangents[4];
 			aiVector3D tangents[4];
-			BoneWeight boneWeights[4];
+			BoneWeight boneWeightIndex[4];
 
 			for (ui32 k = 0; k < face.mNumIndices; k++) {
 				verts[k] = mesh->mVertices[face.mIndices[k]];
@@ -383,20 +296,20 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 					bitangents[k] = mesh->mBitangents[face.mIndices[k]];
 					tangents[k] = mesh->mTangents[face.mIndices[k]];
 				}
-				if (mesh->HasBones() && featureBones) {
-					boneWeights[k].weights[0] = allWeights[face.mIndices[k] * 4 + 0];
-					boneWeights[k].weights[1] = allWeights[face.mIndices[k] * 4 + 1];
-					boneWeights[k].weights[2] = allWeights[face.mIndices[k] * 4 + 2];
-					boneWeights[k].weights[3] = allWeights[face.mIndices[k] * 4 + 3];
-					boneWeights[k].bones[0] = allBoneIndexes[face.mIndices[k] * 4 + 0];
-					boneWeights[k].bones[1] = allBoneIndexes[face.mIndices[k] * 4 + 1];
-					boneWeights[k].bones[2] = allBoneIndexes[face.mIndices[k] * 4 + 2];
-					boneWeights[k].bones[3] = allBoneIndexes[face.mIndices[k] * 4 + 3];
+				if (mesh->HasBones() && Feature_Bones) {
+					boneWeightIndex[k].weights[0] = boneWeights[face.mIndices[k] * 4 + 0];
+					boneWeightIndex[k].weights[1] = boneWeights[face.mIndices[k] * 4 + 1];
+					boneWeightIndex[k].weights[2] = boneWeights[face.mIndices[k] * 4 + 2];
+					boneWeightIndex[k].weights[3] = boneWeights[face.mIndices[k] * 4 + 3];
+					boneWeightIndex[k].bones[0] = boneIndices[face.mIndices[k] * 4 + 0];
+					boneWeightIndex[k].bones[1] = boneIndices[face.mIndices[k] * 4 + 1];
+					boneWeightIndex[k].bones[2] = boneIndices[face.mIndices[k] * 4 + 2];
+					boneWeightIndex[k].bones[3] = boneIndices[face.mIndices[k] * 4 + 3];
 				}
 			}
 
-			if (allWeights != NULL) OPfree(allWeights);
-			if (allBoneIndexes != NULL) OPfree(allBoneIndexes);
+			if (boneWeights != NULL) OPfree(boneWeights);
+			if (boneIndices != NULL) OPfree(boneIndices);
 
 			// Write each vertex
 			for (ui32 k = 0; k < face.mNumIndices; k++) {
@@ -432,14 +345,14 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 
 				if (mesh->HasBones() && features[Model_Bones]) {
 					// TODO
-					writeU16(&myFile, boneWeights[k].bones[0]);
-					writeU16(&myFile, boneWeights[k].bones[1]);
-					writeU16(&myFile, boneWeights[k].bones[2]);
-					writeU16(&myFile, boneWeights[k].bones[3]);
-					writeF32(&myFile, boneWeights[k].weights[0]);
-					writeF32(&myFile, boneWeights[k].weights[1]);
-					writeF32(&myFile, boneWeights[k].weights[2]);
-					writeF32(&myFile, boneWeights[k].weights[3]);
+					writeU16(&myFile, boneWeightIndex[k].bones[0]);
+					writeU16(&myFile, boneWeightIndex[k].bones[1]);
+					writeU16(&myFile, boneWeightIndex[k].bones[2]);
+					writeU16(&myFile, boneWeightIndex[k].bones[3]);
+					writeF32(&myFile, boneWeightIndex[k].weights[0]);
+					writeF32(&myFile, boneWeightIndex[k].weights[1]);
+					writeF32(&myFile, boneWeightIndex[k].weights[2]);
+					writeF32(&myFile, boneWeightIndex[k].weights[3]);
 				}
 
 				if (mesh->HasVertexColors(0) && features[Model_Colors]) {
@@ -479,7 +392,8 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 					writeU32(&myFile, offset + 3);
 					offset += 4;
 				}
-			} else {
+			}
+			else {
 				if (face.mNumIndices == 3) {
 					//OPlog("Triangle");
 					writeU16(&myFile, offset++);
@@ -506,6 +420,9 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 		writeF32(&myFile, boundingBox.max.y);
 		writeF32(&myFile, boundingBox.max.z);
 
+
+		// Write Meta Data
+
 		if (model != NULL) {
 			writeU32(&myFile, model->meshes[i].meshMeta->count);
 			for (ui32 j = 0; j < model->meshes[i].meshMeta->count; j++) {
@@ -521,62 +438,147 @@ void ExportOPM(const OPchar* filename, OPchar* output, f32 scale, OPmodel* model
 
 	}
 
+}
+
+void OPexporter::_write(const OPchar* outputFinal) {
+
+	ofstream myFile(outputFinal, ios::binary);
+
+	_setFeatures();
+
+	
+	writeU16(&myFile, 3); // OPM File Format Version
+
+	writeString(&myFile, scene->mRootNode->mName.C_Str()); // Model name
+
+	// Number of meshes
+	ui32 meshCount = 0;
+	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
+		aiMesh* mesh = scene->mMeshes[i];
+		if (features[Model_Bones] && !mesh->HasBones()) {
+			continue;
+		}
+		meshCount++;
+	}
+	writeU32(&myFile, meshCount);
+
+
+	// Features in the OPM
+	ui32 featureFlags = _getFeaturesFlag();
+	writeU32(&myFile, featureFlags);
+
+
+	// Vertex Mode
+	// 1 == Vertex Stride ( Pos/Norm/Uv )[]
+	// 2 == Vertex Arrays ( Pos )[] ( Norm )[] ( Uv )[]
+	writeU16(&myFile, 1);
+
+
+	ui32 totalVerticesEntireModel = _getTotalVertices();
+	ui32 totalIndicesEntireModel = _getTotalIndices();
+
+	writeU32(&myFile, totalVerticesEntireModel);
+	writeU32(&myFile, totalIndicesEntireModel);
+
+	// Index Size SHORT (16) or INT (32)
+	indexSize = OPindexSize::INT;
+	writeU8(&myFile, (ui8)indexSize);
+
+	_writeMeshData();
+
 	myFile.close();
 
 	// Now create skeleton
-	if (exportSkeleton) {
-
-		for (ui32 i = 0; i < scene->mNumMeshes; i++) {
-			const aiMesh* mesh = scene->mMeshes[i];
-			char buffer[20];
-			OPchar* skelFileNum = OPstringCreateMerged(outputFinal, itoa(i, buffer, 10));
-			OPchar* skeletonOutput = OPstringCreateMerged(skelFileNum, ".skel");
-			ofstream skelFile(outputFinal, ios::binary);
-
-			writeI16(&skelFile, mesh->mNumBones);
-
-			for (ui32 i = 0; i < mesh->mNumBones; i++) {
-				const aiBone* bone = mesh->mBones[i];
-				writeI16(&skelFile, i);
-				writeString(&skelFile, bone->mName.C_Str());
-				for (ui32 j = 0; j < 4; j++) {
-					for (ui32 k = 0; k < 4; k++) {
-						writeF32(&skelFile, bone->mOffsetMatrix[j][k]);
-					}
-				}
-			}
-
-			skelFile.close();
-
-		}
+	if (Export_Skeleton) {
+		_writeSkeleton(outputFinal);
 	}
 
 	// Now create animations
-	if (exportAnimations && scene->HasAnimations()) {
-		for (ui32 i = 0; i < scene->mNumAnimations; i++) {
-			const aiAnimation* animation = scene->mAnimations[i];
-
-			OPchar* animationWithName = OPstringCreateMerged(outputFinal, animation->mName.C_Str());
-			OPchar* animationOutput = OPstringCreateMerged(animationWithName, ".anim");
-			ofstream animFile(animationOutput, ios::binary);
-
-			writeI16(&animFile, animation->mNumChannels);
-			writeString(&animFile, animation->mName.C_Str());
-			writeU32(&animFile, (ui32)animation->mDuration);
-
-			for (ui32 j = 0; j < scene->mNumMeshes; j++) {
-				const aiMesh* mesh = scene->mMeshes[j];
-			}
-
-			for (ui32 j = 0; j < animation->mNumChannels; j++) {
-				const aiNodeAnim* data = animation->mChannels[j];
-
-			}
-
-			animFile.close();
-		}
-
+	if (Export_Animations && scene->HasAnimations()) {
+		_writeAnimations(outputFinal);
 	}
 
 	OPlog(output);
+}
+
+void OPexporter::_writeSkeleton(const OPchar* outputFinal) {
+	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
+		const aiMesh* mesh = scene->mMeshes[i];
+		char buffer[20];
+		OPchar* skelFileNum = OPstringCreateMerged(outputFinal, itoa(i, buffer, 10));
+		OPchar* skeletonOutput = OPstringCreateMerged(skelFileNum, ".skel");
+		ofstream skelFile(outputFinal, ios::binary);
+
+		writeI16(&skelFile, mesh->mNumBones);
+
+		for (ui32 i = 0; i < mesh->mNumBones; i++) {
+			const aiBone* bone = mesh->mBones[i];
+			writeI16(&skelFile, i);
+			writeString(&skelFile, bone->mName.C_Str());
+			for (ui32 j = 0; j < 4; j++) {
+				for (ui32 k = 0; k < 4; k++) {
+					writeF32(&skelFile, bone->mOffsetMatrix[j][k]);
+				}
+			}
+		}
+
+		skelFile.close();
+	}
+}
+
+void OPexporter::_writeAnimations(const OPchar* outputFinal) {
+	for (ui32 i = 0; i < scene->mNumAnimations; i++) {
+		const aiAnimation* animation = scene->mAnimations[i];
+
+		OPchar* animationWithName = OPstringCreateMerged(outputFinal, animation->mName.C_Str());
+		OPchar* animationOutput = OPstringCreateMerged(animationWithName, ".anim");
+		ofstream animFile(animationOutput, ios::binary);
+
+		writeI16(&animFile, animation->mNumChannels);
+		writeString(&animFile, animation->mName.C_Str());
+		writeU32(&animFile, (ui32)animation->mDuration);
+
+		for (ui32 j = 0; j < scene->mNumMeshes; j++) {
+			const aiMesh* mesh = scene->mMeshes[j];
+		}
+
+		for (ui32 j = 0; j < animation->mNumChannels; j++) {
+			const aiNodeAnim* data = animation->mChannels[j];
+
+		}
+
+		animFile.close();
+	}
+}
+
+ui32 GetAvailableTracks(const OPchar* filename, OPchar** buff, double* durations, ui32 max) {
+	Assimp::Importer importer;
+
+	const aiScene* scene = importer.ReadFile(filename,
+		aiProcess_CalcTangentSpace |
+		aiProcess_Triangulate |
+		aiProcess_JoinIdenticalVertices |
+		aiProcess_SortByPType |
+		aiProcess_OptimizeMeshes |
+		aiProcess_OptimizeGraph
+	);	
+	
+	// If the import failed, report it
+	if (!scene)
+	{
+		OPlogErr("Failed");
+		return 0;
+	}
+
+	if (!scene->HasAnimations()) {
+		return 0;
+	}
+
+	ui32 i = 0;
+	for (; i < scene->mNumAnimations && i < max; i++) {
+		buff[i] = OPstringCopy(scene->mAnimations[i]->mName.C_Str());
+		durations[i] = scene->mAnimations[i]->mDuration;
+	}
+
+	return i;
 }
