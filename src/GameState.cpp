@@ -5,7 +5,6 @@
 #include "./Pipeline/include/OPrendererFullForward.h"
 
 #include "OPimgui.h"
-#include "OPlibjpegturbo.h"
 
 
 OPscene scene;
@@ -323,9 +322,6 @@ void ExampleStateInit(OPgameState* last) {
 
 	mainWindow.SetDropCallback(DropCallback);
 
-	OPCMAN.AddLoader(&OPASSETLOADER_JPG);
-
-
 	const OPchar* envImages[6] = {
 		"Textures/Default_Albedo.png",
 		"Textures/Default_Albedo.png",
@@ -342,20 +338,7 @@ void ExampleStateInit(OPgameState* last) {
 	camera.Init(1.0f, 1.0f, OPvec3(0, 5, 5));
 	scene.camera = &camera.Camera;
 
-	//materialPBR.Init(OPNEW(OPeffect("Common/PBR.vert", "Common/PBR.frag")));
-	//materialPBR.rootMaterial.AddParam("uCamPos", &camera.Camera.pos);
-	//renderer->SetMaterial(&materialPBR.rootMaterial, 0);
-
-	//materialInstance = materialPBR.CreateInstance();
-	//materialInstance->SetAlbedoMap("Default_Albedo.png");
-	//materialInstance->SetSpecularMap("Default_Specular.png");
-	//materialInstance->SetGlossMap("Default_Gloss.png");
-	//materialInstance->SetNormalMap("Default_Normals.png");
-	//materialInstance->SetEnvironmentMap(&environment);
-
 	model = *(OPmodel*)OPCMAN.LoadGet("box.opm");
-
-	//materialInstances = &materialInstance->rootMaterialInstance;
 	entity = scene.Add(&model, OPrendererEntityDesc(false));
 }
 
@@ -370,17 +353,16 @@ void ExampleStateRender(OPfloat delta) {
 	OPrenderClear(0.2f, 0.2f, 0.2f, 1);
 	OPrenderCullMode(OPcullFace::BACK);
 	OPrenderCull(false);
-	//OPrenderBlend(true);
-	//OPrenderDepth(false);
-	//OPrenderDepthWrite(false);
 
 	scene.Render(delta);
 
+    // Render the GUI
+
 	OPimguiNewFrame();
-	
+
 	bool openDebugInfo = true;// texFile != NULL || meshFile != NULL;
 	ImGui::SetNextWindowPos(ImVec2(10, 10));
-	ImGui::Begin("Overlay", &openDebugInfo, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width - 20 - 200, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	ImGui::Begin("Overlay", &openDebugInfo, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WindowWidth - 20 - 200, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
 	if (meshFile != NULL) ImGui::Text("Model: %s", meshFile); else  ImGui::Text("Model: ");
 	if (texFile != NULL) ImGui::Text("Texture: %s", texFile); else  ImGui::Text("Texture: ");

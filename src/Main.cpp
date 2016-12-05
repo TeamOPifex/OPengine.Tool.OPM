@@ -3,7 +3,9 @@
 //////////////////////////////////////
 #include "Main.h"
 #include "GameState.h"
+#ifdef ADDON_assimp
 #include "./OPassimp.h"
+#endif
 
 //////////////////////////////////////
 // Application Methods
@@ -13,17 +15,19 @@ OPwindow mainWindow;
 void ApplicationInit() {
 	OPCMAN.Init(OPIFEX_ASSETS);
 	OPloadersAddDefault();
-	OPassimpAddLoaders();
+    #ifdef ADDON_assimp
+    	OPassimpAddLoaders();
 
-	OPassetLoader loaderFBX = {
-		".fbx",
-		"Models/",
-		sizeof(OPmesh),
-		(OPint(*)(OPstream*, void**))OPassimpLoadMem,
-		(OPint(*)(void*))OPassimpUnLoad,
-		NULL
-	};
-	OPCMAN.AddLoader(&loaderFBX);
+    	OPassetLoader loaderFBX = {
+    		".fbx",
+    		"Models/",
+    		sizeof(OPmesh),
+    		(OPint(*)(OPstream*, void**))OPassimpLoadMem,
+    		(OPint(*)(void*))OPassimpUnLoad,
+    		NULL
+    	};
+    	OPCMAN.AddLoader(&loaderFBX);
+    #endif
 
 	OPrenderSetup();
 
