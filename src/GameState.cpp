@@ -1,223 +1,111 @@
 #include "./GameState.h"
 #include "Main.h"
+#include "Utils.h"
 #include "OPMconvert.h"
-
-#include "./Pipeline/include/OPrendererFullForward.h"
-
 #include "OPimgui.h"
 
 void DropCallback(OPuint count, const OPchar** filenames);
-
-
-
-OPscene scene;
-OPrendererFullForward* fullForwardRenderer;
-
-OPmaterialPBR materialPBR;
-OPtextureCube environment;
-OPmaterialPBRInstance* materialInstance;
-OPmaterialPBRInstance* materialInstance2;
-OPmaterialInstance* materialInstances;
-OPmaterialInstance** materialInstancesArr = NULL;
-OPmaterialPBRInstance** materialPBRInstancesArr = NULL;
-OPmodel model;
-OPrendererEntity* entity;
-OPfloat Rotation = 0;
-OPfloat Scale = 1.0f;
-OPboundingBox3D* bounds = NULL;
-
-const OPchar* meshFile = NULL;
-const OPchar* texFile = NULL;
-
-OPchar* outputRoot = NULL;
-OPchar outName[255];
-
-bool autoExport = false;
-bool featureNormals = true;
-bool featureUVs = true;
-bool featureTangents = true;
-bool featureBiTangents = true;
-bool featureColors = false;
-bool featureBones = false;
-bool exportSkeleton = false;
-bool exportAnimations = false;
-
-OPchar* AnimationTracks[10];
-double AnimationDurations[10];
-ui32 totalAnimationTracks = 0;
-
-ui32 SplittersStart[100];
-ui32 SplittersEnd[100];
-OPchar* SplittersName[100];
-ui32 SplittersIndex = 0;
-
-OPmodelMeta metaData[1] = {
-	"albedo", 0, NULL
-};
-
-OPmeshMeta** meshMeta;
 
 bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	const OPchar* ext = NULL;
 
 	// Load up an fbx with assimp
 	exporter.Init(filename);
-	OPmodel* modelTemp = (OPmodel*)OPCMAN.LoadFromFile(filename);
-	if (modelTemp == NULL) return false;
-	model = *modelTemp;
 
-	materialPBRInstancesArr = materialPBR.CreateInstances(&model, false);
-	materialInstancesArr = OPALLOC(OPmaterialInstance*, model.meshCount);
-	for (ui32 i = 0; i < model.meshCount; i++) {
+	OPmodel* model = (OPmodel*)OPCMAN.LoadFromFile(filename);
+	if (model == NULL) return false;
 
-		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->diffuse != NULL) {
+	bounds = model->bounds;
 
-			ext = strrchr(filename, '\\');
-			outputRoot = OPstringCopy(filename);
-			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
-			outputRoot[pos] = NULL;
+	scene.Remove(entity);
+	entity = scene.Add(model, OPrendererEntityDesc(false, true, true, true));
+	
+	// Setup the materials per mesh in the model
+	for (ui32 i = 0; i < model->meshCount; i++) {
+		if (model->meshes[i].materialDesc == NULL) continue;
 
-			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->diffuse);
-			OPlogInfo("TEXTURE: %s", model.meshes[i].materialDesc->diffuse);
-			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
-			if (result == NULL) {
-				materialPBRInstancesArr[i]->SetAlbedoMap("Default_Albedo.png");
-			}
-			else {
-				materialPBRInstancesArr[i]->SetAlbedoMap(result);
-			}
+		OPtexture* result;
+
+		// Diffuse
+		result = LoadTexture(filename, model->meshes[i].materialDesc->diffuse);
+		if (result == NULL) {
+			entity->SetAlbedoMap("Default_Albedo.png", i);
 		}
 		else {
-			materialPBRInstancesArr[i]->SetAlbedoMap("Default_Albedo.png");
+			entity->SetAlbedoMap(result, i);
 		}
 
+		//// Normals
+		//result = LoadTexture(filename, model.meshes[i].materialDesc->normals);
+		//if (result == NULL) {
+		//	materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
+		//}
+		//else {
+		//	materialPBRInstancesArr[i]->SetNormalMap(result);
+		//}
 
-		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->normals != NULL) {
-
-			ext = strrchr(filename, '\\');
-			outputRoot = OPstringCopy(filename);
-			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
-			outputRoot[pos] = NULL;
-
-			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->normals);
-			OPlogInfo("NORMAL: %s", model.meshes[i].materialDesc->normals);
-			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
-			if (result == NULL) {
-				materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
-			}
-			else {
-				materialPBRInstancesArr[i]->SetNormalMap(result);
-			}
-		}
-		else {
-			materialPBRInstancesArr[i]->SetNormalMap("Default_Normals.png");
-		}
-
-
-		if (model.meshes[i].materialDesc != NULL && model.meshes[i].materialDesc->specular != NULL) {
-
-			ext = strrchr(filename, '\\');
-			outputRoot = OPstringCopy(filename);
-			ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
-			outputRoot[pos] = NULL;
-
-			OPchar* fullPath = OPstringCreateMerged(outputRoot, model.meshes[i].materialDesc->specular);
-			OPlogInfo("SPECULAR: %s", model.meshes[i].materialDesc->specular);
-			OPtexture* result = (OPtexture*)OPCMAN.LoadFromFile(fullPath);
-			if (result == NULL) {
-				materialPBRInstancesArr[i]->SetSpecularMap("Default_Specular.png");
-			}
-			else {
-				materialPBRInstancesArr[i]->SetSpecularMap(result);
-			}
-		}
-		else {
-			materialPBRInstancesArr[i]->SetSpecularMap("Default_Specular.png");
-		}
-
-
-		materialPBRInstancesArr[i]->SetGlossMap("Default_Gloss.png");
-		materialPBRInstancesArr[i]->SetEnvironmentMap(&environment);
-
-		materialInstancesArr[i] = &materialPBRInstancesArr[i]->rootMaterialInstance;
+		//// Specular
+		//result = LoadTexture(filename, model.meshes[i].materialDesc->specular);
+		//if (result == NULL) {
+		//	materialPBRInstancesArr[i]->SetSpecularMap("Default_Specular.png");
+		//}
+		//else {
+		//	materialPBRInstancesArr[i]->SetSpecularMap(result);
+		//}
 	}
 
-	scene.entities[0].material = materialInstancesArr;
-
-	meshFile = OPstringCopy(filename);
-	bounds = &model.meshes[0].boundingBox;
-
-	ext = strrchr(filename, '\\');
-	outputRoot = OPstringCopy(filename);
-	ui32 pos = strlen(outputRoot) - strlen(ext) + 1;
-	outputRoot[pos] = NULL;
-	if (ext != NULL) {
-		ui32 len = strlen(ext);
-		for (ui32 i = 1; i < len - 3 && i < 255; i++) {
-			outName[i - 1] = ext[i];
-		}
-
-		outName[len - 4] = 'o';
-		outName[len - 3] = 'p';
-		outName[len - 2] = 'm';
-		outName[len - 1] = NULL;
+	if (outputFilename != NULL) {
+		delete outputFilename;
 	}
-	else {
-		ext = strrchr(filename, '/');
-		if (ext != NULL) {
-			ui32 len = strlen(ext);
-			for (ui32 i = 1; i < len - 3 && i < 255; i++) {
-				outName[i - 1] = ext[i];
-			}
+	outputFilename = GetFilenameOPM(filename);
 
-			outName[len - 4] = 'o';
-			outName[len - 3] = 'p';
-			outName[len - 2] = 'm';
-			outName[len - 1] = NULL;
-
-		}
+	if (outputAbsolutePath != NULL) {
+		delete outputAbsolutePath;
 	}
-
-
+	outputAbsolutePath = GetAbsolutePathOPM(filename);
 
 	return true;
 }
 
-int texInd = 0;
-
-#include <stdio.h>
-#include <iostream>
-#include <fstream>
-using namespace std;
-
 void ExporterState::Init() {
 	OPimguiInit(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE, true);
+	ImGui::GetStyle().WindowRounding = 0.0f;
 
 	mainWindow.SetDropCallback(DropCallback);
-
-	const OPchar* envImages[6] = {
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png",
-		"Textures/Default_Albedo.png"
-	};
-	environment.Init(envImages);
 
 	fullForwardRenderer = OPrendererFullForward::Create();
 	scene.Init(&fullForwardRenderer->rendererRoot, 1000, 50);
 
-	camera.Init(1.0f, 1.0f, OPvec3(0, 5, 5));
+	camera.Init(1.0f, 1.0f, OPvec3(5, 5, 5));
+	camera.Rotation.x = -0.644917190;
+	camera.Rotation.y = -0.785485148;
+	camera.Rotation.z = 0.955316544;
+	camera.Camera.pos = OPvec3(-5, 5, 5);
+	camera.Update();
 	scene.camera = &camera.Camera;
 
-	model = *(OPmodel*)OPCMAN.LoadGet("box.opm");
-	entity = scene.Add(&model, OPrendererEntityDesc(false));
+	OPfloat shadowCameraSize = 16.0f;
+	fullForwardRenderer->shadowCamera.SetOrtho(OPvec3(-6, 6, 1), OPVEC3_ZERO, OPVEC3_UP, 0.1f, 15.0f, -shadowCameraSize, shadowCameraSize, -shadowCameraSize, shadowCameraSize);
+	//fullForwardRenderer->shadowCamera.SetOrtho(OPvec3(2), OPVEC3_ZERO, 10.0f);
+
+	//OPmodel* model = (OPmodel*)OPCMAN.LoadGet("box.opm");
+	OPmodel* model = (OPmodel*)OPCMAN.LoadGet("bomb.opm");
+	entity = scene.Add(model, OPrendererEntityDesc(false, true, true, false));
+	bounds = OPboundingBox3D(OPvec3(-0.5), OPvec3(0.5));
+	entity->SetAlbedoMap("Default_Albedo.png");
+	entity->world.SetScl(Scale)->Translate(0, (bounds.max.y - bounds.min.y) / 2.0f, 0);
+
+	model = (OPmodel*)OPCMAN.LoadGet("box.opm");
+	OPmodel* ground = OPquadCreateZPlane(10.0f, 10.0f);
+	OPrendererEntity* groundEnt = scene.Add(model, OPrendererEntityDesc(false, true, true, false));
+	groundEnt->SetAlbedoMap("Default_Normals.png");
+	groundEnt->world.SetScl(10, 0.1, 10)->Translate(0, -0.05, 0);
 }
 
 OPint ExporterState::Update(OPtimer* timer) {
 	camera.Update(timer);
-	entity->world.SetRotY(Rotation / 200.0f)->Scl(Scale);
+	scene.Update(timer);
+	entity->world.SetScl(Scale)->Translate(0, -1.0 * Scale * bounds.min.y, 0);
 	return false;
 }
 
@@ -228,99 +116,83 @@ void ExporterState::Render(OPfloat delta) {
 	OPrenderCull(false);
 
 	scene.Render(delta);
+	
+	// Happens here so that we can get a rendered image of the model too
+	_processDroppedFiles();
 
 
 	// Render the GUI
 
-	OPimguiNewFrame();
+	{ // Render Settings Window
+		OPimguiNewFrame();
 
-	bool openDebugInfo = true;// texFile != NULL || meshFile != NULL;
-	ImGui::SetNextWindowPos(ImVec2(10, 10));
-	ImGui::Begin("Overlay", &openDebugInfo, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WindowWidth - 20 - 200, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+		ImGui::SetNextWindowPos(ImVec2(10, 10));
+		ImGui::Begin("Settings", false, ImVec2(250, 300));
 
-	if (meshFile != NULL) ImGui::Text("Model: %s", meshFile); else  ImGui::Text("Model: ");
-	if (texFile != NULL) ImGui::Text("Texture: %s", texFile); else  ImGui::Text("Texture: ");
+		ImGui::Checkbox("Normals", &exporter.Feature_Normals);
+		ImGui::Checkbox("UVs", &exporter.Feature_UVs);
+		ImGui::Checkbox("Tangents", &exporter.Feature_Tangents);
+		ImGui::Checkbox("BiTangents", &exporter.Feature_BiTangents);
+		ImGui::Checkbox("Colors", &exporter.Feature_Colors);
+		ImGui::Checkbox("Bones", &exporter.Feature_Bones);
+		ImGui::Checkbox("Skeleton", &exporter.Export_Skeleton);
+		ImGui::Checkbox("Animations", &exporter.Export_Animations);
 
-	ImGui::SliderFloat("Scale", &Scale, 0.001f, 4.0f);
-
-	ImGui::End();
-
-	bool alwaysShow = true;
-	ImGui::SetNextWindowPos(ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width - 20 - 180, 10));
-	ImGui::Begin("Overlay2", &alwaysShow, ImVec2(190, 80), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("Scale");
-	if (ImGui::Button("Default")) {
-		Scale = 1.0f;
-	}
-	if (ImGui::Button("CM -> Meters")) {
-		Scale = 0.01f;
-	}
-	ImGui::End();
-
-	ImGui::SetNextWindowPos(ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width - 20 - 240, OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height - 110));
-	ImGui::Begin("OverlayExport", &alwaysShow, ImVec2(250, 100), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::InputText("Output", outName, 255);
-	if (ImGui::Button("Export")) {
-		if (meshFile != NULL) {
-			OPchar* output = OPstringCreateMerged(outputRoot, outName);
-			exporter.Export(output);
-			//ExportOPM(meshFile, output, Scale, &model,
-			//	featureNormals,
-			//	featureUVs,
-			//	featureTangents,
-			//	featureBiTangents,
-			//	featureColors,
-			//	featureBones,
-			//	exportSkeleton,
-			//	exportAnimations,
-			//	SplittersIndex,
-			//	SplittersStart,
-			//	SplittersEnd,
-			//	SplittersName);
-			OPfree(output);
+		ImGui::Text("Scale");
+		if (ImGui::Button("Default")) {
+			Scale = 1.0f;
 		}
-	}
-
-	ImGui::Checkbox("Auto-Export on drop", &autoExport);
-	ImGui::End();
-
-	ImGui::SetNextWindowPos(ImVec2(10, 100));
-	ImGui::Begin("OverlayFeatures", &alwaysShow, ImVec2(200, 200), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-	ImGui::Checkbox("Normals", &featureNormals);
-	ImGui::Checkbox("UVs", &featureUVs);
-	ImGui::Checkbox("Tangents", &featureTangents);
-	ImGui::Checkbox("BiTangents", &featureBiTangents);
-	ImGui::Checkbox("Colors", &featureColors);
-	ImGui::Checkbox("Bones", &featureBones);
-	ImGui::Checkbox("Skeleton", &exportSkeleton);
-	ImGui::Checkbox("Animations", &exportAnimations);
-
-	if (materialInstancesArr != NULL) {
-		ImGui::SliderInt("Mesh", &texInd, 0, model.meshCount);
-	}
-	ImGui::End();
-	//ImGui::ShowTestWindow();
-
-	if (totalAnimationTracks > 0) {
-
-		ImGui::SetNextWindowPos(ImVec2(10, 310));
-		ImGui::Begin("OverlayAnimations", &alwaysShow, ImVec2(200, 20 * totalAnimationTracks), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-		for (ui32 i = 0; i < totalAnimationTracks; i++) {
-			ImGui::Text("%s : %d frames", AnimationTracks[i], (int)AnimationDurations[i]);
+		if (ImGui::Button("CM -> Meters")) {
+			Scale = 0.01f;
 		}
+		ImGui::SliderFloat("Scale", &Scale, 0.001f, 4.0f);
+
+		ImGui::Checkbox("Auto-Export on drop", &autoExport);
+
 		ImGui::End();
+	}
+	
+	{ // Render Export Window
+		bool always = true;
+		if (outputFilename != NULL) {
+			ImGui::SetNextWindowPos(ImVec2(0, OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height - 41));
+			ImGui::Begin("OverlayExport", &always, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width, 41), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
-		if (SplittersIndex > 0) {
-			ImGui::SetNextWindowPos(ImVec2(10, 330 + 20 * totalAnimationTracks));
-			ImGui::Begin("OverlaySplitters", &alwaysShow, ImVec2(200, 20 * SplittersIndex), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+			char buffer[255];
+			sprintf(buffer, "Export %s", outputFilename->C_Str());
 
-			for (ui32 i = 0; i < SplittersIndex; i++) {
-				ImGui::Text("%s : %d - %d", SplittersName[i], SplittersStart[i], SplittersEnd[i]);
+			if (ImGui::Button(buffer, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width, 25))) {
+				exporter.Export(outputAbsolutePath->C_Str());
 			}
+
 			ImGui::End();
 		}
+	}
+
+
+	{ // Render Animations Window
+		//ImGui::ShowTestWindow();
+
+		//if (totalAnimationTracks > 0) {
+
+		//	ImGui::SetNextWindowPos(ImVec2(10, 310));
+		//	ImGui::Begin("OverlayAnimations", &alwaysShow, ImVec2(200, 20 * totalAnimationTracks), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+		//	for (ui32 i = 0; i < totalAnimationTracks; i++) {
+		//		ImGui::Text("%s : %d frames", AnimationTracks[i], (int)AnimationDurations[i]);
+		//	}
+		//	ImGui::End();
+
+		//	if (SplittersIndex > 0) {
+		//		ImGui::SetNextWindowPos(ImVec2(10, 330 + 20 * totalAnimationTracks));
+		//		ImGui::Begin("OverlaySplitters", &alwaysShow, ImVec2(200, 20 * SplittersIndex), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+		//		for (ui32 i = 0; i < SplittersIndex; i++) {
+		//			ImGui::Text("%s : %d - %d", SplittersName[i], SplittersStart[i], SplittersEnd[i]);
+		//		}
+		//		ImGui::End();
+		//	}
+		//}
 	}
 
 	ImGui::Render();
@@ -332,136 +204,183 @@ OPint ExporterState::Exit() {
 	return 0;
 }
 
-void ExporterState::_drop(OPuint count, const OPchar** filenames) {
+void ExporterState::_processTexture(const OPchar* filename) {
+
+	OPtexture* tex = (OPtexture*)OPCMAN.LoadFromFile(filename);
+	if (tex == NULL) return;
+
+	//materialInstance->SetAlbedoMap(tex);
+
+	//if (materialInstancesArr != NULL) {
+	//	// Set the current materials albedo texture
+	//	materialPBRInstancesArr[texInd]->SetAlbedoMap(tex);
+	//}
+
+	// Set Meta
+
+	const OPchar* ext = strrchr(filename, '\\');
+	OPchar* justTexName = OPstringCopy(&ext[1]);
+
+	//metaData[0].dataSize = strlen(justTexName) * sizeof(OPchar);
+	//metaData[0].data = justTexName;
+}
+
+void ExporterState::_processAnimations(const OPchar* filename) {
+
+	//SplittersIndex = 0;
+	//// Assume it's an animation splitter file
+	//ifstream myFile(filename);
+	//OPchar str[255];
+	//if (myFile.is_open()) {
+	//	while (!myFile.eof()) {
+	//		myFile.getline(str, 255);
+	//		// Parse out each line
+	//		if (OPstringCount(str, ':') != 2) continue;
+	//		// Must have exactly 2 :'s
+
+	//		ui32 colonPos = OPstringFirst(str, ':');
+	//		OPchar* start = OPstringSub(str, 0, colonPos);
+	//		OPchar* secondPart = &str[colonPos + 1];
+	//		colonPos = OPstringFirst(&str[1], ':');
+	//		OPchar* end = OPstringSub(secondPart, 0, colonPos + 1);
+	//		OPchar* name = &secondPart[colonPos + 2];
+
+	//		SplittersStart[SplittersIndex] = atoi(start);
+	//		SplittersEnd[SplittersIndex] = atoi(end);
+	//		SplittersName[SplittersIndex] = OPstringCopy(name);
+	//		SplittersIndex++;
+
+	//	}
+	//}
+}
+
+void ExporterState::_processModel(const OPchar* filename) {
+	if (!_loadMeshFromFile(filename)) return;
+
+	if (OPvec3Len(bounds.max - bounds.min) > 80) {
+		Scale = 0.01f;
+	}
+
+	if (autoExport) {
+		exporter.Export(outputAbsolutePath->C_Str());
+	}	
+}
+
+#ifdef OPIFEX_OPENGL_ES_2
+#ifdef OPIFEX_IOS
+#include <OpenGLES/ES2/gl.h>
+#else
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+#endif
+#else
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#endif
+
+
+void windowDump(OPstring* out) {
+	int i, j;
+	FILE *fptr;
+	static int counter = 0; /* This supports animation sequences */
+	char fname[32];
+	ui8 *image, *image2;
+
+	ui32 width = OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width;
+	ui32 height = OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height;
+
+	/* Allocate our buffer for the image */
+	if ((image = (ui8*)OPalloc(3 * width*height * sizeof(char))) == NULL) {
+		OPlogErr("Failed to allocate memory for image");
+		return;
+	}
+
+	if ((image2 = (ui8*)OPalloc(3 * width*height * sizeof(char))) == NULL) {
+		OPlogErr("Failed to allocate memory for image");
+		return;
+	}
+
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+
+	glReadBuffer(GL_BACK_LEFT);
+	glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, image);
+
+	// Flip the image back around
+
+	for (j = height - 1; j >= 0; j--) {
+		for (i = 0; i<width; i++) {
+			image2[3 * (height - j)*width + 3 * i + 0] = image[3 * j*width + 3 * i + 0];
+			image2[3 * (height - j)*width + 3 * i + 1] = image[3 * j*width + 3 * i + 1];
+			image2[3 * (height - j)*width + 3 * i + 2] = image[3 * j*width + 3 * i + 2];
+		}
+	}
+
+	OPstring* output = out->Copy();
+	output->Add(".png");
+	OPimagePNGCreate24(image2, width, height, output->C_Str());
+	delete output;
+
+}
+
+void ExporterState::_processDroppedFiles() {
+
+	if (currentFile > dropCount) {
+		return;
+	}
+	
+	if (currentFile <= dropCount && currentFile != 0) {
+		OPuint prevFile = currentFile - 1;
+		// Grab a snapshot
+		windowDump(outputAbsolutePath);
+	}
+
+	if (dropCount == 0 || currentFile == dropCount) {
+		currentFile++;
+		return;
+	}
+
+	camera.Rotation.x = -0.644917190;
+	camera.Rotation.y = -0.785485148;
+	camera.Rotation.z = 0.955316544;
+	camera.Camera.pos = OPvec3(-5, 5, 5);
+	camera.Update();
+
+	//camera.Init(1.0f, 1.0f, OPvec3(5, 5, 5));
+
+	// We haven't maxed out yet, so if this is the 2nd model, 
 
 	const OPchar* ext = NULL;
+	ext = strrchr(dropFilenames[currentFile].C_Str(), '.');
 
-	// Process any textures first
-	for (OPuint i = 0; i < count; i++) {
-		ext = strrchr(filenames[i], '.');
-		if (ext == NULL) continue;
-
-		if (OPstringEquals(ext, ".png") || OPstringEquals(ext, ".jpg") || OPstringEquals(ext, ".tga")) {
-			OPtexture* tex = (OPtexture*)OPCMAN.LoadFromFile(filenames[i]);
-			if (tex == NULL) continue;
-			texFile = OPstringCopy(filenames[i]);
-			materialInstance->SetAlbedoMap(tex);
-
-			if (materialInstancesArr != NULL) {
-				materialPBRInstancesArr[texInd]->SetAlbedoMap(tex);
-			}
-
-			// Set Meta
-
-			OPchar* justTexName = OPstringCopy(filenames[i]);
-			ext = strrchr(justTexName, '\\');
-			justTexName = OPstringCopy(&ext[1]);
-
-			metaData[0].dataSize = strlen(justTexName) * sizeof(OPchar);
-			metaData[0].data = justTexName;
-		}
-
+	if (IsImageFile(ext)) { // Process file as a texture
+		_processTexture(dropFilenames[currentFile].C_Str());
 	}
-
-	for (OPuint i = 0; i < count; i++) {
-		ext = strrchr(filenames[i], '.');
-		if (ext == NULL) continue;
-
-		if (OPstringEquals(ext, ".txt")) {
-			SplittersIndex = 0;
-			// Assume it's an animation splitter file
-			ifstream myFile(filenames[i]);
-			OPchar str[255];
-			if (myFile.is_open()) {
-				while (!myFile.eof()) {
-					myFile.getline(str, 255);
-					// Parse out each line
-					if (OPstringCount(str, ':') != 2) continue;
-					// Must have exactly 2 :'s
-
-					ui32 colonPos = OPstringFirst(str, ':');
-					OPchar* start = OPstringSub(str, 0, colonPos);
-					OPchar* secondPart = &str[colonPos + 1];
-					colonPos = OPstringFirst(&str[1], ':');
-					OPchar* end = OPstringSub(secondPart, 0, colonPos + 1);
-					OPchar* name = &secondPart[colonPos + 2];
-
-					SplittersStart[SplittersIndex] = atoi(start);
-					SplittersEnd[SplittersIndex] = atoi(end);
-					SplittersName[SplittersIndex] = OPstringCopy(name);
-					SplittersIndex++;
-
-				}
-			}
-		}
+	else if (IsAnimationFile(ext)) { // Process as animation file
+		_processAnimations(dropFilenames[currentFile].C_Str());
 	}
-
-	// Process models next
-	for (OPuint i = 0; i < count; i++) {
-		ext = strrchr(filenames[i], '.');
-		if (ext == NULL) continue;
-
-		if (OPstringEquals(ext, ".fbx")) {
-
-			if (_loadMeshFromFile(filenames[i])) {
-				if (OPvec3Len(bounds->max - bounds->min) > 80) {
-					Scale = 0.01f;
-				}
-				totalAnimationTracks = GetAvailableTracks(filenames[i], AnimationTracks, AnimationDurations, 10);
-				if (autoExport) {
-					OPchar* output = OPstringCreateMerged(outputRoot, outName);
-
-					exporter.Export(output);
-
-					//ExportOPM(meshFile, output, Scale, &model,
-					//	featureNormals,
-					//	featureUVs,
-					//	featureTangents,
-					//	featureBiTangents,
-					//	featureColors,
-					//	featureBones,
-					//	exportSkeleton,
-					//	exportAnimations,
-					//	SplittersIndex,
-					//	SplittersStart,
-					//	SplittersEnd,
-					//	SplittersName);
-					OPfree(output);
-				}
-			}
-		}
-		else if (OPstringEquals(ext, ".obj")) {
-			if (_loadMeshFromFile(filenames[i])) {
-				if (OPvec3Len(bounds->max - bounds->min) > 80) {
-					Scale = 0.01f;
-				}
-				if (autoExport) {
-					OPchar* output = OPstringCreateMerged(outputRoot, outName);
-					exporter.Export(output);
-					//ExportOPM(meshFile, output, Scale, &model,
-					//	featureNormals,
-					//	featureUVs,
-					//	featureTangents,
-					//	featureBiTangents,
-					//	featureColors,
-					//	featureBones,
-					//	exportSkeleton,
-					//	exportAnimations,
-					//	SplittersIndex,
-					//	SplittersStart,
-					//	SplittersEnd,
-					//	SplittersName);
-					OPfree(output);
-				}
-				totalAnimationTracks = 0;
-			}
-		}
-		else if (OPstringEquals(ext, ".opm")) {
-			_loadMeshFromFile(filenames[i]);
+	else if(IsModelFile(ext)) { // Process as model file
+		if (OPstringEquals(ext, ".opm")) { // Doesn't go through Assimp for OPM files
+			_loadMeshFromFile(dropFilenames[currentFile].C_Str());
 			Scale = 1.0f;
-			bounds = NULL;
-			totalAnimationTracks = 0;
+			bounds = OPboundingBox3D();
+		} else {
+			_processModel(dropFilenames[currentFile].C_Str());
 		}
+	}
+
+	currentFile++;
+}
+
+void ExporterState::_drop(OPuint count, const OPchar** filenames) {
+	currentFile = 0;
+	dropCount = count;
+	if (dropFilenames != NULL) {
+		OPfree(dropFilenames);
+	}
+	dropFilenames = OPALLOC(OPstring, count);
+	for (ui32 i = 0; i < count; i++) {
+		dropFilenames[i].Init(filenames[i]);
 	}
 }
 

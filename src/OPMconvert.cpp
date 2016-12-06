@@ -12,9 +12,9 @@ void OPexporter::Init(const OPchar* filename) {
 		aiProcess_CalcTangentSpace |
 		aiProcess_Triangulate |
 		aiProcess_JoinIdenticalVertices |
-		aiProcess_SortByPType |
-		aiProcess_OptimizeMeshes |
-		aiProcess_OptimizeGraph
+		aiProcess_SortByPType | 
+		aiProcess_OptimizeGraph |
+		aiProcess_OptimizeMeshes
 	);	
 	
 	// If the import failed, report it
@@ -24,7 +24,16 @@ void OPexporter::Init(const OPchar* filename) {
 		return;
 	}
 
-	HasAnimations = scene->HasAnimations();
+	HasAnimations = Export_Animations = scene->HasAnimations();
+	if (scene->HasMeshes()) {
+		aiMesh* mesh = scene->mMeshes[0];
+		Feature_Normals = mesh->HasNormals();
+		Feature_UVs = mesh->HasTextureCoords(0);
+		Feature_Tangents = Feature_BiTangents = mesh->HasTangentsAndBitangents();
+		Feature_Colors = mesh->HasVertexColors(0);
+		Feature_Bones = Export_Skeleton = mesh->HasBones();
+		Export_Model = true;
+	}
 }
 
 void OPexporter::Export(const OPchar* output) {
@@ -36,12 +45,13 @@ void OPexporter::Export(const OPchar* output) {
 		out = OPstringCopy(output);
 	}
 
-
-	OPstringToLower(out);
-	OPint contains = OPstringContains(out, ".opm");
+	OPstring check = OPstring(out);
+	check.ToLower();
+	OPint contains = check.Contains(".opm");
 	if (contains > 0) {
 		out[contains] = NULL;
 	}
+
 	// Now we can access the file's contents
 	OPchar* outputFinal = OPstringCreateMerged(out, ".opm");
 
@@ -225,6 +235,7 @@ void OPexporter::_setBoneData(aiMesh* mesh) {
 
 void OPexporter::_writeMeshData(ofstream* myFile) {
 
+	OPlogInfo("Model Export\n========================");
 	ui32 offset = 0;
 
 	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
@@ -365,6 +376,8 @@ void OPexporter::_writeMeshData(ofstream* myFile) {
 			}
 		}
 
+		OPlogInfo(" Mesh[%d] Offset %d", i, offset);
+
 		for (ui32 j = 0; j < mesh->mNumFaces; j++) {
 			aiFace face = mesh->mFaces[j];
 			if (face.mNumIndices > 4) {
@@ -410,6 +423,8 @@ void OPexporter::_writeMeshData(ofstream* myFile) {
 			}
 		}
 
+
+
 		writeF32(myFile, boundingBox.min.x);
 		writeF32(myFile, boundingBox.min.y);
 		writeF32(myFile, boundingBox.min.z);
@@ -417,6 +432,21 @@ void OPexporter::_writeMeshData(ofstream* myFile) {
 		writeF32(myFile, boundingBox.max.y);
 		writeF32(myFile, boundingBox.max.z);
 
+
+		writeString(myFile, "test.png");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
+		writeString(myFile, "");
 
 		// Write Meta Data
 
@@ -434,6 +464,8 @@ void OPexporter::_writeMeshData(ofstream* myFile) {
 		//}
 
 	}
+
+	OPlogInfo(" Offset %d", offset);
 
 }
 

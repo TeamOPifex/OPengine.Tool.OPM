@@ -21,6 +21,13 @@ enum ModelFeatures {
 	MAX_FEATURES
 };
 
+struct AnimationTrack {
+	OPchar* Name;
+	double Duration;
+	ui32 Start;
+	ui32 End;
+};
+
 struct OPexporter {
 	bool Feature_Normals,
 		Feature_UVs,
@@ -39,13 +46,16 @@ struct OPexporter {
 	ui32* splitEnd;
 	OPchar** splitName;
 
-	f32 scale;
+	f32 scale = 1.0f;
 
 	const OPchar* path;
 	OPchar* output;
 
 	Assimp::Importer importer;
 	const aiScene* scene;
+
+	AnimationTrack* animationTracks;
+	ui32 animationCount;
 
 	ui32 features[MAX_FEATURES];
 	OPindexSize indexSize;

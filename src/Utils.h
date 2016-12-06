@@ -1,10 +1,18 @@
 #pragma once
 
-#include "./Core/include/OPtypes.h"
+#include "./OPengine.h"
 
 #include <iostream>
 #include <fstream>
 using namespace std;
+
+
+bool IsImageFile(const OPchar* ext);
+bool IsAnimationFile(const OPchar* ext);
+bool IsModelFile(const OPchar* ext);
+OPtexture* LoadTexture(const OPchar* dir, const OPchar* tex);
+OPstring* GetFilenameOPM(const OPchar* filename);
+OPstring* GetAbsolutePathOPM(const OPchar* filename);
 
 inline void write(ofstream* stream, void* data, i32 size) {
 	stream->write((char*)data, size);

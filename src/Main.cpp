@@ -17,16 +17,6 @@ void ApplicationInit() {
 	OPloadersAddDefault();
     #ifdef ADDON_assimp
     	OPassimpAddLoaders();
-
-    	OPassetLoader loaderFBX = {
-    		".fbx",
-    		"Models/",
-    		sizeof(OPmesh),
-    		(OPint(*)(OPstream*, void**))OPassimpLoadMem,
-    		(OPint(*)(void*))OPassimpUnLoad,
-    		NULL
-    	};
-    	OPCMAN.AddLoader(&loaderFBX);
     #endif
 
 	OPrenderSetup();
