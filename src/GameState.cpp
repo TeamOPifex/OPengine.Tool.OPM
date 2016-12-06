@@ -5,6 +5,7 @@
 #include "OPimgui.h"
 
 void DropCallback(OPuint count, const OPchar** filenames);
+void windowDump(OPstring* out);
 
 bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	const OPchar* ext = NULL;
@@ -15,16 +16,24 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	OPmodel* model = (OPmodel*)OPCMAN.LoadFromFile(filename);
 	if (model == NULL) return false;
 
-	bounds = model->bounds;
+	bounds = OPboundingBox3D();
 
 	scene.Remove(entity);
 	entity = scene.Add(model, OPrendererEntityDesc(false, true, true, true));
-	
+
 	// Setup the materials per mesh in the model
 	for (ui32 i = 0; i < model->meshCount; i++) {
 		if (model->meshes[i].materialDesc == NULL) continue;
 
 		OPtexture* result;
+
+
+		if (model->meshes[i].boundingBox.min.x < bounds.min.x) bounds.min.x = model->meshes[i].boundingBox.min.x;
+		if (model->meshes[i].boundingBox.min.y < bounds.min.y) bounds.min.y = model->meshes[i].boundingBox.min.y;
+		if (model->meshes[i].boundingBox.min.z < bounds.min.z) bounds.min.z = model->meshes[i].boundingBox.min.z;
+		if (model->meshes[i].boundingBox.max.x > bounds.max.x) bounds.max.x = model->meshes[i].boundingBox.max.x;
+		if (model->meshes[i].boundingBox.max.y > bounds.max.y) bounds.max.y = model->meshes[i].boundingBox.max.y;
+		if (model->meshes[i].boundingBox.max.z > bounds.max.z) bounds.max.z = model->meshes[i].boundingBox.max.z;
 
 		// Diffuse
 		result = LoadTexture(filename, model->meshes[i].materialDesc->diffuse);
@@ -116,18 +125,24 @@ void ExporterState::Render(OPfloat delta) {
 	OPrenderCull(false);
 
 	scene.Render(delta);
-	
+
 	// Happens here so that we can get a rendered image of the model too
 	_processDroppedFiles();
+
+    if(outputAbsolutePath != NULL && getThumbnail) {
+        windowDump(outputAbsolutePath);
+        getThumbnail = false;
+    }
 
 
 	// Render the GUI
 
+    bool always = true;
 	{ // Render Settings Window
 		OPimguiNewFrame();
 
 		ImGui::SetNextWindowPos(ImVec2(10, 10));
-		ImGui::Begin("Settings", false, ImVec2(250, 300));
+		ImGui::Begin("Settings", &always, ImVec2(250, 300));
 
 		ImGui::Checkbox("Normals", &exporter.Feature_Normals);
 		ImGui::Checkbox("UVs", &exporter.Feature_UVs);
@@ -149,19 +164,21 @@ void ExporterState::Render(OPfloat delta) {
 
 		ImGui::Checkbox("Auto-Export on drop", &autoExport);
 
+        if (ImGui::Button("Snap Thumbnail")) {
+            getThumbnail = true;
+        }
 		ImGui::End();
 	}
-	
+
 	{ // Render Export Window
-		bool always = true;
 		if (outputFilename != NULL) {
-			ImGui::SetNextWindowPos(ImVec2(0, OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height - 41));
-			ImGui::Begin("OverlayExport", &always, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width, 41), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+			ImGui::SetNextWindowPos(ImVec2(0, (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->HeightScaled) - 41));
+			ImGui::Begin("OverlayExport", &always, ImVec2((OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScaled), 41), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
 			char buffer[255];
 			sprintf(buffer, "Export %s", outputFilename->C_Str());
 
-			if (ImGui::Button(buffer, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width, 25))) {
+			if (ImGui::Button(buffer, ImVec2((OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScaled), 25))) {
 				exporter.Export(outputAbsolutePath->C_Str());
 			}
 
@@ -209,6 +226,19 @@ void ExporterState::_processTexture(const OPchar* filename) {
 	OPtexture* tex = (OPtexture*)OPCMAN.LoadFromFile(filename);
 	if (tex == NULL) return;
 
+
+    #ifdef OPIFEX_WINDOWS
+       const OPchar* ext = strrchr(filename, '\\');
+    #else
+       const OPchar* ext = strrchr(filename, '/');
+    #endif
+    OPchar* justTexName = OPstringCopy(&ext[1]);
+
+
+	for (ui32 i = 0; i < entity->model->meshCount; i++) {
+        entity->SetAlbedoMap(tex, i);
+        entity->model->meshes[i].materialDesc->diffuse = justTexName;
+    }
 	//materialInstance->SetAlbedoMap(tex);
 
 	//if (materialInstancesArr != NULL) {
@@ -217,9 +247,6 @@ void ExporterState::_processTexture(const OPchar* filename) {
 	//}
 
 	// Set Meta
-
-	const OPchar* ext = strrchr(filename, '\\');
-	OPchar* justTexName = OPstringCopy(&ext[1]);
 
 	//metaData[0].dataSize = strlen(justTexName) * sizeof(OPchar);
 	//metaData[0].data = justTexName;
@@ -263,7 +290,7 @@ void ExporterState::_processModel(const OPchar* filename) {
 
 	if (autoExport) {
 		exporter.Export(outputAbsolutePath->C_Str());
-	}	
+	}
 }
 
 #ifdef OPIFEX_OPENGL_ES_2
@@ -328,7 +355,7 @@ void ExporterState::_processDroppedFiles() {
 	if (currentFile > dropCount) {
 		return;
 	}
-	
+
 	if (currentFile <= dropCount && currentFile != 0) {
 		OPuint prevFile = currentFile - 1;
 		// Grab a snapshot
@@ -348,7 +375,7 @@ void ExporterState::_processDroppedFiles() {
 
 	//camera.Init(1.0f, 1.0f, OPvec3(5, 5, 5));
 
-	// We haven't maxed out yet, so if this is the 2nd model, 
+	// We haven't maxed out yet, so if this is the 2nd model,
 
 	const OPchar* ext = NULL;
 	ext = strrchr(dropFilenames[currentFile].C_Str(), '.');

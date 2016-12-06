@@ -6,17 +6,17 @@ void OPexporter::Init(const OPchar* filename) {
 	path = filename;
 
 	// And have it read the given file with some example postprocessing
-	// Usually - if speed is not the most important aspect for you - you'll 
+	// Usually - if speed is not the most important aspect for you - you'll
 	// propably to request more postprocessing than we do in this example.
 	scene = importer.ReadFile(filename,
 		aiProcess_CalcTangentSpace |
 		aiProcess_Triangulate |
 		aiProcess_JoinIdenticalVertices |
-		aiProcess_SortByPType | 
+		aiProcess_SortByPType |
 		aiProcess_OptimizeGraph |
 		aiProcess_OptimizeMeshes
-	);	
-	
+	);
+
 	// If the import failed, report it
 	if (!scene)
 	{
@@ -79,7 +79,7 @@ void OPexporter::_setFeatures() {
 	features[Model_Animations] = Export_Animations;
 	features[Model_Meta] = 0;
 
-	
+
 	// All of the meshes must have the same layout
 	// We'll turn features off if we have to
 	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
@@ -87,23 +87,23 @@ void OPexporter::_setFeatures() {
 
 		ui32 stride = 0;
 		if (features[Model_Normals] && !mesh->HasNormals()) {
-			OPlogErr("Mesh %d didn't have 'Normals' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'Normals' to add: '%s'", i, mesh->mName.C_Str());
 			features[Model_Normals] = 0;
 		}
 		if (features[Model_UVs] && !mesh->HasTextureCoords(0)) {
-			OPlogErr("Mesh %d didn't have 'UVs' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'UVs' to add: '%s'", i, mesh->mName.C_Str());
 			features[Model_UVs] = 0;
 		}
 		if (features[Model_Tangents] && !mesh->HasTangentsAndBitangents()) {
-			OPlogErr("Mesh %d didn't have 'Tangents' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'Tangents' to add: '%s'", i, mesh->mName.C_Str());
 			features[Model_Tangents] = 0;
 		}
 		if (features[Model_Bitangents] && !mesh->HasTangentsAndBitangents()) {
-			OPlogErr("Mesh %d didn't have 'Bitangents' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'Bitangents' to add: '%s'", i, mesh->mName.C_Str());
 			features[Model_Bitangents] = 0;
 		}
 		if (features[Model_Bones] && !mesh->HasBones()) {
-			OPlogErr("Mesh %d didn't have 'Bones' to add: '%s'", i, mesh->mName);
+			OPlogErr("Mesh %d didn't have 'Bones' to add: '%s'", i, mesh->mName.C_Str());
 			//features[Model_Bones] = 0;
 		}
 	}
@@ -475,7 +475,7 @@ void OPexporter::_write(const OPchar* outputFinal) {
 
 	_setFeatures();
 
-	
+
 	writeU16(&myFile, 3); // OPM File Format Version
 
 	writeString(&myFile, scene->mRootNode->mName.C_Str()); // Model name
@@ -534,7 +534,8 @@ void OPexporter::_writeSkeleton(const OPchar* outputFinal) {
 	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
 		const aiMesh* mesh = scene->mMeshes[i];
 		char buffer[20];
-		OPchar* skelFileNum = OPstringCreateMerged(outputFinal, itoa(i, buffer, 10));
+        sprintf(buffer, "%d", i);
+		OPchar* skelFileNum = OPstringCreateMerged(outputFinal, buffer);
 		OPchar* skeletonOutput = OPstringCreateMerged(skelFileNum, ".skel");
 		ofstream skelFile(outputFinal, ios::binary);
 
@@ -590,8 +591,8 @@ ui32 GetAvailableTracks(const OPchar* filename, OPchar** buff, double* durations
 		aiProcess_SortByPType |
 		aiProcess_OptimizeMeshes |
 		aiProcess_OptimizeGraph
-	);	
-	
+	);
+
 	// If the import failed, report it
 	if (!scene)
 	{

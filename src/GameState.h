@@ -20,6 +20,7 @@ struct ExporterState {
 	OPstring* outputFilename = NULL;
 	OPstring* outputAbsolutePath = NULL;
 	bool autoExport = false;
+    bool getThumbnail = false;
 
 	void Init();
 	OPint Update(OPtimer* timer);

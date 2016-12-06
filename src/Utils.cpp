@@ -65,7 +65,11 @@ OPtexture* LoadTexture(const OPchar* dir, const OPchar* tex) {
 
 	OPstring outputRoot(dir);
 	// Get rid of any filenames on the filename path will leave only the directory the file is in
-	OPint pos = outputRoot.IndexOfLast('\\');
+    #ifdef OPIFEX_WINDOWS
+	   OPint pos = outputRoot.IndexOfLast('\\');
+    #else
+	   OPint pos = outputRoot.IndexOfLast('/');
+    #endif
 	if (pos != -1) {
 		outputRoot.Resize(pos + 1, false);
 	}
@@ -77,9 +81,13 @@ OPtexture* LoadTexture(const OPchar* dir, const OPchar* tex) {
 }
 
 OPstring* GetFilenameOPM(const OPchar* filename) {
-	
+
 	// Get just the filename
-	const OPchar* ext = strrchr(filename, '\\');
+    #ifdef OPIFEX_WINDOWS
+	   const OPchar* ext = strrchr(filename, '\\');
+    #else
+	   const OPchar* ext = strrchr(filename, '/');
+    #endif
 	if (ext == NULL) {
 		ext = filename;
 	}
@@ -94,13 +102,21 @@ OPstring* GetFilenameOPM(const OPchar* filename) {
 
 OPstring* GetAbsolutePathOPM(const OPchar* filename) {
 	OPstring outputRoot = OPstring(filename);
-	OPint pos = outputRoot.IndexOfLast('\\');
+    #ifdef OPIFEX_WINDOWS
+    	OPint pos = outputRoot.IndexOfLast('\\');
+    #else
+    	OPint pos = outputRoot.IndexOfLast('/');
+    #endif
 	if (pos != -1) {
 		outputRoot.Resize(pos + 1, false);
 	}
 
 	// Get just the filename
-	const OPchar* ext = strrchr(filename, '\\');
+    #ifdef OPIFEX_WINDOWS
+	   const OPchar* ext = strrchr(filename, '\\');
+    #else
+	   const OPchar* ext = strrchr(filename, '/');
+    #endif
 	if (ext == NULL) {
 		ext = filename;
 	}
