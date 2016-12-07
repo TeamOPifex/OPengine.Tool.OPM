@@ -83,7 +83,7 @@ OP_MAIN_START
 
 		OPchar* output = OPstringCreateMerged(filename, ".opm");
 
-		OPexporter exporter = OPexporter(args[1]);
+		OPexporter exporter = OPexporter(args[1], (OPmodel*)OPCMAN.LoadGet(args[1]));
 		exporter.Feature_Normals = true;
 		exporter.Feature_UVs = true;
 		exporter.Feature_Tangents = true;

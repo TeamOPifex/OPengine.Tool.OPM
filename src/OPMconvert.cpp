@@ -2,8 +2,9 @@
 #include "./Data/include/OPstring.h"
 #include "./Human/include/Rendering/OPMvertex.h"
 
-void OPexporter::Init(const OPchar* filename) {
+void OPexporter::Init(const OPchar* filename, OPmodel* desc) {
 	path = filename;
+	existingModel = desc;
 
 	// And have it read the given file with some example postprocessing
 	// Usually - if speed is not the most important aspect for you - you'll
@@ -12,9 +13,9 @@ void OPexporter::Init(const OPchar* filename) {
 		aiProcess_CalcTangentSpace |
 		aiProcess_Triangulate |
 		aiProcess_JoinIdenticalVertices |
-		aiProcess_SortByPType |
+		aiProcess_SortByPType/* |
 		aiProcess_OptimizeGraph |
-		aiProcess_OptimizeMeshes
+		aiProcess_OptimizeMeshes*/
 	);
 
 	// If the import failed, report it
@@ -432,21 +433,45 @@ void OPexporter::_writeMeshData(ofstream* myFile) {
 		writeF32(myFile, boundingBox.max.y);
 		writeF32(myFile, boundingBox.max.z);
 
+		if (existingModel != NULL && existingModel->meshes[i].materialDesc != NULL) {
 
-		writeString(myFile, "test.png");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
-		writeString(myFile, "");
+			if (existingModel->meshes[i].materialDesc->diffuse != NULL) {
+				writeString(myFile, existingModel->meshes[i].materialDesc->diffuse);
+			}
+			else {
+				writeString(myFile, "");
+			}
+
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+		}
+		else {
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+			writeString(myFile, "");
+		}
 
 		// Write Meta Data
 

@@ -10,11 +10,12 @@ void windowDump(OPstring* out);
 bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	const OPchar* ext = NULL;
 
-	// Load up an fbx with assimp
-	exporter.Init(filename);
 
 	OPmodel* model = (OPmodel*)OPCMAN.LoadFromFile(filename);
 	if (model == NULL) return false;
+
+	// Load up an fbx with assimp
+	exporter.Init(filename, model);
 
 	bounds = OPboundingBox3D();
 
@@ -97,14 +98,12 @@ void ExporterState::Init() {
 	fullForwardRenderer->shadowCamera.SetOrtho(OPvec3(-6, 6, 1), OPVEC3_ZERO, OPVEC3_UP, 0.1f, 15.0f, -shadowCameraSize, shadowCameraSize, -shadowCameraSize, shadowCameraSize);
 	//fullForwardRenderer->shadowCamera.SetOrtho(OPvec3(2), OPVEC3_ZERO, 10.0f);
 
-	//OPmodel* model = (OPmodel*)OPCMAN.LoadGet("box.opm");
-	OPmodel* model = (OPmodel*)OPCMAN.LoadGet("bomb.opm");
+	OPmodel* model = (OPmodel*)OPCMAN.LoadGet("box.opm");
 	entity = scene.Add(model, OPrendererEntityDesc(false, true, true, false));
 	bounds = OPboundingBox3D(OPvec3(-0.5), OPvec3(0.5));
 	entity->SetAlbedoMap("Default_Albedo.png");
 	entity->world.SetScl(Scale)->Translate(0, (bounds.max.y - bounds.min.y) / 2.0f, 0);
 
-	model = (OPmodel*)OPCMAN.LoadGet("box.opm");
 	OPmodel* ground = OPquadCreateZPlane(10.0f, 10.0f);
 	OPrendererEntity* groundEnt = scene.Add(model, OPrendererEntityDesc(false, true, true, false));
 	groundEnt->SetAlbedoMap("Default_Normals.png");
@@ -136,38 +135,52 @@ void ExporterState::Render(OPfloat delta) {
 
 
 	// Render the GUI
+	OPimguiNewFrame();
 
     bool always = true;
 	{ // Render Settings Window
-		OPimguiNewFrame();
+		if (outputFilename != NULL) {
 
-		ImGui::SetNextWindowPos(ImVec2(10, 10));
-		ImGui::Begin("Settings", &always, ImVec2(250, 300));
+			ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiSetCond_::ImGuiSetCond_FirstUseEver);
+			ImGui::Begin("Settings", &always, ImVec2(250, 400), -1.0F, ImGuiWindowFlags_NoResize);
 
-		ImGui::Checkbox("Normals", &exporter.Feature_Normals);
-		ImGui::Checkbox("UVs", &exporter.Feature_UVs);
-		ImGui::Checkbox("Tangents", &exporter.Feature_Tangents);
-		ImGui::Checkbox("BiTangents", &exporter.Feature_BiTangents);
-		ImGui::Checkbox("Colors", &exporter.Feature_Colors);
-		ImGui::Checkbox("Bones", &exporter.Feature_Bones);
-		ImGui::Checkbox("Skeleton", &exporter.Export_Skeleton);
-		ImGui::Checkbox("Animations", &exporter.Export_Animations);
+			ImGui::Checkbox("Normals", &exporter.Feature_Normals);
+			ImGui::Checkbox("UVs", &exporter.Feature_UVs);
+			ImGui::Checkbox("Tangents", &exporter.Feature_Tangents);
+			ImGui::Checkbox("BiTangents", &exporter.Feature_BiTangents);
+			ImGui::Checkbox("Colors", &exporter.Feature_Colors);
+			ImGui::Checkbox("Bones", &exporter.Feature_Bones);
+			ImGui::Checkbox("Skeleton", &exporter.Export_Skeleton);
+			ImGui::Checkbox("Animations", &exporter.Export_Animations);
 
-		ImGui::Text("Scale");
-		if (ImGui::Button("Default")) {
-			Scale = 1.0f;
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Spacing();
+
+			ImGui::Text("Scale");
+			if (ImGui::Button("Default")) {
+				Scale = 1.0f;
+			}
+			if (ImGui::Button("CM -> Meters")) {
+				Scale = 0.01f;
+			}
+			ImGui::SliderFloat("Scale", &Scale, 0.001f, 4.0f);
+
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Spacing();
+
+			ImGui::Checkbox("Auto-Export on drop", &autoExport);
+
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Spacing();
+
+			if (ImGui::Button("Snap Thumbnail")) {
+				getThumbnail = true;
+			}
+			ImGui::End();
 		}
-		if (ImGui::Button("CM -> Meters")) {
-			Scale = 0.01f;
-		}
-		ImGui::SliderFloat("Scale", &Scale, 0.001f, 4.0f);
-
-		ImGui::Checkbox("Auto-Export on drop", &autoExport);
-
-        if (ImGui::Button("Snap Thumbnail")) {
-            getThumbnail = true;
-        }
-		ImGui::End();
 	}
 
 	{ // Render Export Window
@@ -390,7 +403,6 @@ void ExporterState::_processDroppedFiles() {
 		if (OPstringEquals(ext, ".opm")) { // Doesn't go through Assimp for OPM files
 			_loadMeshFromFile(dropFilenames[currentFile].C_Str());
 			Scale = 1.0f;
-			bounds = OPboundingBox3D();
 		} else {
 			_processModel(dropFilenames[currentFile].C_Str());
 		}

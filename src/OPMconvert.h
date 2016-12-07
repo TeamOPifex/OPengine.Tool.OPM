@@ -63,13 +63,15 @@ struct OPexporter {
 	OPfloat* boneWeights;
 	i32* boneIndices;
 
+	OPmodel* existingModel;
+
 	OPexporter() { }
 
-	OPexporter(const OPchar* filename) {
-		Init(filename);
+	OPexporter(const OPchar* filename, OPmodel* desc) {
+		Init(filename, desc);
 	}
 
-	void Init(const OPchar* filename);
+	void Init(const OPchar* filename, OPmodel* desc);
 	void Export();
 	void Export(const OPchar* output);
 
