@@ -37,6 +37,217 @@ void OPexporter::Init(const OPchar* filename, OPmodel* desc) {
 	}
 }
 
+ui32 OPexporter::_findBoneIndex(const OPchar* name) {
+	ui32 ind = 0;
+
+	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
+		const aiMesh* mesh = scene->mMeshes[i];
+
+		if (!mesh->HasBones()) continue;
+
+		for (ui32 j = 0; j < mesh->mNumBones; j++) {
+			if (OPstringEquals(mesh->mBones[j]->mName.C_Str(), name)) {
+				// This is the same bone
+				return ind;
+			}
+			ind++;
+		}
+	}
+}
+
+OPmat4 OPexporter::_findBoneOffset(ui32 boneInd) {
+	ui32 ind = 0;
+
+	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
+		const aiMesh* mesh = scene->mMeshes[i];
+
+		if (!mesh->HasBones()) continue;
+		for (ui32 j = 0; j < mesh->mNumBones; j++) {
+			if (ind == boneInd) { // This is the bone we're looking for
+				OPmat4 result;
+				for (ui32 j = 0; j < 4; j++) {
+					for (ui32 k = 0; k < 4; k++) {
+						result[j][k] = mesh->mBones[j]->mOffsetMatrix[j][k];
+						//writeF32(&skelFile, bone->mOffsetMatrix[j][k]);
+					}
+				}
+				return result;
+			}
+			ind++;
+		}
+	}
+
+	return OPMAT4_IDENTITY;
+}
+
+OPmat4 OPexporter::_findBoneOffset(const OPchar* name) {
+	return _findBoneOffset(_findBoneIndex(name));
+}
+
+OPmat4 aiMatrixToOPmat4(aiMatrix4x4 mat) {
+	OPmat4 result;
+	for (ui32 i = 0; i < 4; i++) {
+		for (ui32 j = 0; j < 4; j++) {
+			result[i][j] = mat[i][j];
+		}
+	}
+	return result;
+}
+
+void OPexporter::_loadBones() {
+	boneMapping.clear();
+	_setHierarchy();
+
+	for (ui32 m = 0; m < scene->mNumMeshes; m++) {
+		aiMesh* mesh = scene->mMeshes[m];
+
+		for (ui32 i = 0; i < mesh->mNumBones; i++) {
+			string BoneName(mesh->mBones[i]->mName.data);
+			ui32 BoneIndex = boneMapping[BoneName]; 
+			boneInfo[BoneIndex].BoneOffset = aiMatrixToOPmat4(mesh->mBones[i]->mOffsetMatrix);
+			
+			//for (ui32 j = 0; j < mesh->mBones[i]->mNumWeights; j++) {
+			//	ui32 VertexID = entries[m].BaseVertex + mesh->mBones[i]->mWeights[j].mVertexId;
+			//	float Weight = mesh->mBones[i]->mWeights[j].mWeight;
+			//	Bones[VertexID].AddBoneData(BoneIndex, Weight);
+			//}
+		}
+	}
+
+}
+
+ui32 index = 0;
+void OPexporter::_setHierarchy(aiNode* node, i32 parent) {
+	string NodeName(node->mName.data);
+	boneMapping[NodeName] = index;
+	BoneInfo bi;
+	boneInfo.push_back(bi);
+	boneInfo[index].ParentIndex = parent;
+	boneInfo[index].Name = node->mName.C_Str();
+	index++;
+	numBones++;
+	for (ui32 i = 0; i < node->mNumChildren; i++) {
+		_setHierarchy(node->mChildren[i], index);
+	}
+}
+
+void OPexporter::_setHierarchy() {
+	index = 0;
+	numBones = 0;
+	_setHierarchy(scene->mRootNode, -1);
+}
+
+
+OPskeleton* OPexporter::LoadSkeleton(OPstream* stream) {
+
+	_loadBones();
+
+	OPskeleton* result = NULL;
+	OPstream* str = OPstream::Create(256);
+	
+	str->I16(numBones); // bone count
+
+	// Global Inverse Transform
+	for (ui32 j = 0; j < 4; j++) {
+		for (ui32 k = 0; k < 4; k++) {
+			str->F32((f32)OPMAT4_IDENTITY.cols[j].row[k]);
+		}
+	}
+
+	for (ui32 i = 0; i < numBones; i++) {
+		str->I16(boneInfo[i].ParentIndex);
+		str->WriteString(boneInfo[i].Name);
+
+		// Bind pose
+		for (ui32 j = 0; j < 4; j++) {
+			for (ui32 k = 0; k < 4; k++) {
+				str->F32((f32)OPMAT4_IDENTITY.cols[j].row[k]);
+			}
+		}
+
+		// Offset
+		for (ui32 j = 0; j < 4; j++) {
+			for (ui32 k = 0; k < 4; k++) {
+				//str->F32((f32)OPMAT4_IDENTITY.cols[j].row[k]);
+				str->F32((f32)boneInfo[i].BoneOffset[j][k]);
+			}
+		}
+	}
+
+	//for (ui32 i = 0; i < scene->mNumMeshes; i++) {
+	//	const aiMesh* mesh = scene->mMeshes[i];
+
+	//	if (!mesh->HasBones()) continue;
+
+	//	str->I16(numBones);
+
+	//	// Global Inverse Transform
+	//	for (ui32 j = 0; j < 4; j++) {
+	//		for (ui32 k = 0; k < 4; k++) {
+	//			str->F32(OPMAT4_IDENTITY.cols[j].row[k]);
+	//		}
+	//	}
+
+	//	for (ui32 i = 0; i < mesh->mNumBones; i++) {
+	//		const aiBone* bone = mesh->mBones[i];
+
+	//		str->I16(0);
+	//		str->WriteString(bone->mName.C_Str());
+
+	//		// Bind Bose
+	//		for (ui32 j = 0; j < 4; j++) {
+	//			for (ui32 k = 0; k < 4; k++) {
+	//				str->F32(OPMAT4_IDENTITY.cols[j].row[k]);
+	//			}
+	//		}
+
+	//		// Offset
+	//		for (ui32 j = 0; j < 4; j++) {
+	//			for (ui32 k = 0; k < 4; k++) {
+	//				str->F32(bone->mOffsetMatrix[j][k]);
+	//			}
+	//		}
+	//	}
+	//}
+
+	str->Reset();
+	OPloaderOPskeletonLoad(str, &result);
+
+	return result;
+}
+
+OPskeletonAnimationResult OPexporter::LoadAnimations(OPstream* stream) {
+	OPskeletonAnimationResult result;	
+	result.AnimationsCount = scene->mNumAnimations;
+	result.Animations = OPALLOC(OPskeletonAnimation*, scene->mNumAnimations);
+	result.AnimationNames = OPALLOC(OPchar*, scene->mNumAnimations);
+
+	for (ui32 i = 0; i < scene->mNumAnimations; i++) {
+		const aiAnimation* animation = scene->mAnimations[i];
+		
+		result.Animations[i] = OPNEW(OPskeletonAnimation());
+		result.AnimationNames[i] = OPstringCopy(animation->mName.C_Str());
+
+		result.Animations[i]->BoneCount = animation->mNumChannels;
+		result.Animations[i]->FrameCount = (ui32)animation->mDuration;
+
+		//writeI16(&animFile, animation->mNumChannels);
+		//writeString(&animFile, animation->mName.C_Str());
+		//writeU32(&animFile, (ui32)animation->mDuration);
+
+		//for (ui32 j = 0; j < scene->mNumMeshes; j++) {
+		//	const aiMesh* mesh = scene->mMeshes[j];
+		//}
+
+		//for (ui32 j = 0; j < animation->mNumChannels; j++) {
+		//	const aiNodeAnim* data = animation->mChannels[j];
+
+		//}
+
+	}
+	return result;
+}
+
 void OPexporter::Export(const OPchar* output) {
 	OPchar* out;
 	if (output == NULL) {
@@ -223,11 +434,15 @@ void OPexporter::_setBoneData(aiMesh* mesh) {
 	boneIndices = (i32*)OPallocZero(sizeof(i32) * mesh->mNumVertices * 4);
 	for (ui32 boneInd = 0; boneInd < mesh->mNumBones; boneInd++) {
 		const aiBone* bone = mesh->mBones[boneInd];
+		string BoneName(bone->mName.data);
+		ui32 index = boneMapping[BoneName];
+
 		for (int boneWeightInd = 0; boneWeightInd < bone->mNumWeights; boneWeightInd++) {
 			const aiVertexWeight* weight = &bone->mWeights[boneWeightInd];
 			ui32 offset = boneCounts[weight->mVertexId]++;
+
 			boneWeights[(weight->mVertexId * 4) + offset] = weight->mWeight;
-			boneIndices[(weight->mVertexId * 4) + offset] = boneInd;
+			boneIndices[(weight->mVertexId * 4) + offset] = index;
 		}
 	}
 
@@ -238,6 +453,8 @@ void OPexporter::_writeMeshData(ofstream* myFile) {
 
 	OPlogInfo("Model Export\n========================");
 	ui32 offset = 0;
+	
+	_loadBones();
 
 	for (ui32 i = 0; i < scene->mNumMeshes; i++) {
 		aiMesh* mesh = scene->mMeshes[i];
@@ -317,9 +534,6 @@ void OPexporter::_writeMeshData(ofstream* myFile) {
 				}
 			}
 
-			if (boneWeights != NULL) OPfree(boneWeights);
-			if (boneIndices != NULL) OPfree(boneIndices);
-
 			// Write each vertex
 			for (ui32 k = 0; k < face.mNumIndices; k++) {
 
@@ -375,6 +589,11 @@ void OPexporter::_writeMeshData(ofstream* myFile) {
 					writeF32(myFile, 0);
 				}
 			}
+		}
+
+		if (mesh->HasBones() && Feature_Bones) {
+			if (boneWeights != NULL) OPfree(boneWeights);
+			if (boneIndices != NULL) OPfree(boneIndices);
 		}
 
 		OPlogInfo(" Mesh[%d] Offset %d", i, offset);
@@ -498,8 +717,9 @@ void OPexporter::_write(const OPchar* outputFinal) {
 
 	ofstream myFile(outputFinal, ios::binary);
 
-	_setFeatures();
+	//OPstream* str = OPstream::Create(1024);
 
+	_setFeatures();
 
 	writeU16(&myFile, 3); // OPM File Format Version
 

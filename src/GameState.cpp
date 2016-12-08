@@ -4,8 +4,20 @@
 #include "OPMconvert.h"
 #include "OPimgui.h"
 
+#include "./Human/include/Platform/opengl/OPtextureAPIGL.h"
+
 void DropCallback(OPuint count, const OPchar** filenames);
 void windowDump(OPstring* out);
+
+OPtexture* result;
+OPskeleton* activeSkeleton = NULL;
+OPskeletonAnimationResult animations = { NULL, 0 };
+OPskeletonAnimation* activeAnimation = NULL;
+
+bool ItemGetter(void* source, int pos, const char** result) {
+	*result = animations.AnimationNames[pos];
+	return true;
+}
 
 bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	const OPchar* ext = NULL;
@@ -20,14 +32,34 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	bounds = OPboundingBox3D();
 
 	scene.Remove(entity);
-	entity = scene.Add(model, OPrendererEntityDesc(false, true, true, true));
+
+	if (exporter.HasAnimations) {
+		OPstream* stream = OPfile::ReadFromFile(filename);
+		// Get Skeleton
+		OPskeleton* skeleton = exporter.LoadSkeleton(stream);
+		activeSkeleton = skeleton;
+
+		// Get Animations
+		animations = exporter.LoadAnimations(stream);
+		if (animations.AnimationsCount > 0) {
+			activeAnimation = animations.Animations[0];
+		}
+		else {
+			activeAnimation = NULL;
+		}
+	}
+
+	if (activeSkeleton != NULL) {
+		entity = scene.Add(model, activeSkeleton, OPrendererEntityDesc(true, true, true, true));
+	}
+	else {
+		entity = scene.Add(model, OPrendererEntityDesc(false, true, true, true));
+	}
 
 	// Setup the materials per mesh in the model
 	for (ui32 i = 0; i < model->meshCount; i++) {
 		if (model->meshes[i].materialDesc == NULL) continue;
-
-		OPtexture* result;
-
+		
 
 		if (model->meshes[i].boundingBox.min.x < bounds.min.x) bounds.min.x = model->meshes[i].boundingBox.min.x;
 		if (model->meshes[i].boundingBox.min.y < bounds.min.y) bounds.min.y = model->meshes[i].boundingBox.min.y;
@@ -114,8 +146,15 @@ OPint ExporterState::Update(OPtimer* timer) {
 	camera.Update(timer);
 	scene.Update(timer);
 	entity->world.SetScl(Scale)->Translate(0, -1.0 * Scale * bounds.min.y, 0);
+
+	if (activeSkeleton != NULL) {
+		OPskeletonUpdate(activeSkeleton);
+	}
 	return false;
 }
+
+int ind = 0;
+char* items = "test\0two\0three";
 
 void ExporterState::Render(OPfloat delta) {
 
@@ -138,6 +177,8 @@ void ExporterState::Render(OPfloat delta) {
 	OPimguiNewFrame();
 
     bool always = true;
+	bool show_app_metrics;
+
 	{ // Render Settings Window
 		if (outputFilename != NULL) {
 
@@ -179,6 +220,7 @@ void ExporterState::Render(OPfloat delta) {
 			if (ImGui::Button("Snap Thumbnail")) {
 				getThumbnail = true;
 			}
+
 			ImGui::End();
 		}
 	}
@@ -199,6 +241,48 @@ void ExporterState::Render(OPfloat delta) {
 		}
 	}
 
+	ui32 windowWidth = (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScaled);
+
+	{ // Render Select Window
+		ImGui::SetNextWindowPos(ImVec2(0, 0));
+		ImGui::Begin("SelectorMeshes", &always, ImVec2(windowWidth / 2, 36), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+		if (outputFilename != NULL) {
+			ImGui::PushItemWidth(-1.0f);
+			ImGui::Combo("Meshes", &ind, items);
+		}
+		ImGui::End();
+
+		ImGui::SetNextWindowPos(ImVec2(windowWidth / 2, 0));
+		ImGui::Begin("SelectorAnimations", &always, ImVec2(windowWidth / 2, 36), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+		if (outputFilename != NULL) {
+			ImGui::PushItemWidth(-1.0f);
+			ImGui::Combo("Animations", &ind, ItemGetter, animations.AnimationNames, animations.AnimationsCount);
+		}
+		ImGui::End();
+	}
+
+
+	//ImGui::ShowTestWindow();
+
+	if (result != NULL) {
+		ImGui::SetNextWindowPos(ImVec2(windowWidth - 128 - 16 - 4, 40));
+		ui32 childWindowWidth = 128 + 16;
+		ImGui::Begin("CurrentTextures", &always, ImVec2(childWindowWidth, 128 + 16 + 16), 0.0f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+		OPtextureGL* glTex = (OPtextureGL*)result->internalPtr;
+		ImTextureID tex = (void*)glTex->Handle;
+		ImGui::Image(tex, ImVec2(128, 128), ImVec2(0, 0), ImVec2(1, 1), ImColor(255, 255, 255, 255), ImColor(255, 255, 255, 128));
+
+		ImVec2 textSize = ImGui::CalcTextSize("Diffuse");
+		ImGui::Text("");
+		ui32 offset = (childWindowWidth / 2) - (textSize.x / 2);
+		ImGui::SameLine(offset);
+		ImGui::Text("Diffuse");
+
+		ImGui::End();
+
+		//ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 0.8;
+	}
 
 	{ // Render Animations Window
 		//ImGui::ShowTestWindow();
@@ -239,6 +323,7 @@ void ExporterState::_processTexture(const OPchar* filename) {
 	OPtexture* tex = (OPtexture*)OPCMAN.LoadFromFile(filename);
 	if (tex == NULL) return;
 
+	result = tex;
 
     #ifdef OPIFEX_WINDOWS
        const OPchar* ext = strrchr(filename, '\\');
@@ -380,12 +465,6 @@ void ExporterState::_processDroppedFiles() {
 		return;
 	}
 
-	camera.Rotation.x = -0.644917190;
-	camera.Rotation.y = -0.785485148;
-	camera.Rotation.z = 0.955316544;
-	camera.Camera.pos = OPvec3(-5, 5, 5);
-	camera.Update();
-
 	//camera.Init(1.0f, 1.0f, OPvec3(5, 5, 5));
 
 	// We haven't maxed out yet, so if this is the 2nd model,
@@ -400,6 +479,13 @@ void ExporterState::_processDroppedFiles() {
 		_processAnimations(dropFilenames[currentFile].C_Str());
 	}
 	else if(IsModelFile(ext)) { // Process as model file
+
+		camera.Rotation.x = -0.644917190;
+		camera.Rotation.y = -0.785485148;
+		camera.Rotation.z = 0.955316544;
+		camera.Camera.pos = OPvec3(-5, 5, 5);
+		camera.Update();
+
 		if (OPstringEquals(ext, ".opm")) { // Doesn't go through Assimp for OPM files
 			_loadMeshFromFile(dropFilenames[currentFile].C_Str());
 			Scale = 1.0f;

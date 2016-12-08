@@ -28,6 +28,24 @@ struct AnimationTrack {
 	ui32 End;
 };
 
+
+struct OPskeletonAnimationResult {
+	OPskeletonAnimation** Animations;
+	OPchar** AnimationNames;
+	OPuint AnimationsCount;
+};
+
+#include <map>
+#include <vector>
+
+struct BoneInfo
+{
+	i32 ParentIndex = -1;
+	const OPchar* Name = NULL;
+	OPmat4 BoneOffset = OPMAT4_IDENTITY;
+	OPmat4 FinalTransformation = OPMAT4_IDENTITY;
+};
+
 struct OPexporter {
 	bool Feature_Normals,
 		Feature_UVs,
@@ -63,6 +81,10 @@ struct OPexporter {
 	OPfloat* boneWeights;
 	i32* boneIndices;
 
+	std::map<std::string, ui32> boneMapping;
+	ui32 numBones;
+	vector<BoneInfo> boneInfo;
+
 	OPmodel* existingModel;
 
 	OPexporter() { }
@@ -74,6 +96,8 @@ struct OPexporter {
 	void Init(const OPchar* filename, OPmodel* desc);
 	void Export();
 	void Export(const OPchar* output);
+	OPskeleton* LoadSkeleton(OPstream* stream);
+	OPskeletonAnimationResult LoadAnimations(OPstream* stream);
 
 	// Private
 	void _write(const OPchar* outputFinal);
@@ -87,6 +111,12 @@ struct OPexporter {
 	ui32 _getTotalIndices(aiMesh* mesh);
 	void _writeMeshData(ofstream* myFile);
 	void _setBoneData(aiMesh* mesh);
+	ui32 _findBoneIndex(const OPchar* name);
+	OPmat4 _findBoneOffset(ui32 ind);
+	OPmat4 _findBoneOffset(const OPchar* name);
+	void _loadBones();
+	void _setHierarchy();
+	void _setHierarchy(aiNode* node, i32 parent);
 };
 
 struct BoneWeight {
