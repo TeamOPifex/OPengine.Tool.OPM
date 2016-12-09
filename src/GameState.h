@@ -21,12 +21,14 @@ struct ExporterState {
 	OPstring* outputAbsolutePath = NULL;
 	bool autoExport = false;
     bool getThumbnail = false;
+	bool useAnimation = false;
 
 	void Init();
 	OPint Update(OPtimer* timer);
 	void Render(OPfloat delta);
 	OPint Exit();
 
+	bool _loadOPMFromFile(const OPchar* filename);
 	bool _loadMeshFromFile(const OPchar* filename);
 	void _drop(OPuint count, const OPchar** filenames);
 	void _processDroppedFiles();

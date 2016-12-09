@@ -19,19 +19,94 @@ bool ItemGetter(void* source, int pos, const char** result) {
 	return true;
 }
 
+bool ExporterState::_loadOPMFromFile(const OPchar* filename) {
+	OPstring filePath(filename);
+
+	OPmodel* model = (OPmodel*)OPCMAN.LoadFromFile(filePath.C_Str());
+	if (model == NULL) return false;
+
+	bounds = OPboundingBox3D();
+	scene.Remove(entity);
+
+	activeSkeleton = NULL;
+
+	filePath.Add(".skel");
+	if (OPfile::Exists(filePath.C_Str())) {
+		OPstream* stream = OPfile::ReadFromFile(filePath.C_Str());
+		OPskeleton* skeleton;
+		if (OPloaderOPskeletonLoad(stream, &skeleton)) {
+			activeSkeleton = skeleton;
+			// Get Animations
+			//animations = exporter.LoadAnimations(stream);
+			//if (animations.AnimationsCount > 0) {
+			//	activeAnimation = animations.Animations[0];
+			//}
+			//else {
+			//	activeAnimation = NULL;
+			//}
+		}
+	}
+
+	if (activeSkeleton != NULL) {
+		entity = scene.Add(model, activeSkeleton, OPrendererEntityDesc(true, true, true, true));
+	}
+	else {
+		entity = scene.Add(model, OPrendererEntityDesc(false, true, true, true));
+	}
+	
+	// Setup the materials per mesh in the model
+	for (ui32 i = 0; i < model->meshCount; i++) {
+		if (model->meshes[i].materialDesc == NULL) continue;
+
+		if (model->meshes[i].boundingBox.min.x < bounds.min.x) bounds.min.x = model->meshes[i].boundingBox.min.x;
+		if (model->meshes[i].boundingBox.min.y < bounds.min.y) bounds.min.y = model->meshes[i].boundingBox.min.y;
+		if (model->meshes[i].boundingBox.min.z < bounds.min.z) bounds.min.z = model->meshes[i].boundingBox.min.z;
+		if (model->meshes[i].boundingBox.max.x > bounds.max.x) bounds.max.x = model->meshes[i].boundingBox.max.x;
+		if (model->meshes[i].boundingBox.max.y > bounds.max.y) bounds.max.y = model->meshes[i].boundingBox.max.y;
+		if (model->meshes[i].boundingBox.max.z > bounds.max.z) bounds.max.z = model->meshes[i].boundingBox.max.z;
+
+		// Diffuse
+		result = LoadTexture(filename, model->meshes[i].materialDesc->diffuse);
+		if (result == NULL) {
+			entity->SetAlbedoMap("Default_Albedo.png", i);
+		}
+		else {
+			entity->SetAlbedoMap(result, i);
+		}
+	}
+
+	if (outputFilename != NULL) {
+		delete outputFilename;
+	}
+	outputFilename = GetFilenameOPM(filename);
+
+	if (outputAbsolutePath != NULL) {
+		delete outputAbsolutePath;
+	}
+	outputAbsolutePath = GetAbsolutePathOPM(filename);
+
+	return true;
+}
+
 bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	const OPchar* ext = NULL;
 
 
-	OPmodel* model = (OPmodel*)OPCMAN.LoadFromFile(filename);
-	if (model == NULL) return false;
+	//OPmodel* model = (OPmodel*)OPCMAN.LoadFromFile(filename);
+	//if (model == NULL) return false;
 
 	// Load up an fbx with assimp
-	exporter.Init(filename, model);
+	exporter.Init(filename, NULL);
 
+	if (exporter.scene == NULL) {
+		return false;
+	}
+	
 	bounds = OPboundingBox3D();
 
 	scene.Remove(entity);
+
+	activeSkeleton = NULL;
 
 	if (exporter.HasAnimations) {
 		OPstream* stream = OPfile::ReadFromFile(filename);
@@ -40,7 +115,7 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 		activeSkeleton = skeleton;
 
 		// Get Animations
-		animations = exporter.LoadAnimations(stream);
+		animations = exporter.LoadAnimations();
 		if (animations.AnimationsCount > 0) {
 			activeAnimation = animations.Animations[0];
 		}
@@ -48,6 +123,8 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 			activeAnimation = NULL;
 		}
 	}
+
+	OPmodel* model = exporter.existingModel;
 
 	if (activeSkeleton != NULL) {
 		entity = scene.Add(model, activeSkeleton, OPrendererEntityDesc(true, true, true, true));
@@ -147,6 +224,10 @@ OPint ExporterState::Update(OPtimer* timer) {
 	scene.Update(timer);
 	entity->world.SetScl(Scale)->Translate(0, -1.0 * Scale * bounds.min.y, 0);
 
+	if (useAnimation && activeAnimation != NULL && activeSkeleton != NULL) {
+		OPskeletonAnimationUpdate(activeAnimation, timer);
+		OPskeletonAnimationApply(activeAnimation, activeSkeleton);
+	}
 	if (activeSkeleton != NULL) {
 		OPskeletonUpdate(activeSkeleton);
 	}
@@ -206,6 +287,16 @@ void ExporterState::Render(OPfloat delta) {
 				Scale = 0.01f;
 			}
 			ImGui::SliderFloat("Scale", &Scale, 0.001f, 4.0f);
+
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Spacing();
+
+			if (ImGui::Checkbox("Show Animations", &useAnimation)) {
+				if (activeSkeleton != NULL) {
+					activeSkeleton->Reset();
+				}
+			}
 
 			ImGui::Spacing();
 			ImGui::Separator();
@@ -382,9 +473,9 @@ void ExporterState::_processAnimations(const OPchar* filename) {
 void ExporterState::_processModel(const OPchar* filename) {
 	if (!_loadMeshFromFile(filename)) return;
 
-	if (OPvec3Len(bounds.max - bounds.min) > 80) {
-		Scale = 0.01f;
-	}
+	//if (OPvec3Len(bounds.max - bounds.min) > 80) {
+	//	Scale = 0.01f;
+	//}
 
 	if (autoExport) {
 		exporter.Export(outputAbsolutePath->C_Str());
@@ -487,7 +578,7 @@ void ExporterState::_processDroppedFiles() {
 		camera.Update();
 
 		if (OPstringEquals(ext, ".opm")) { // Doesn't go through Assimp for OPM files
-			_loadMeshFromFile(dropFilenames[currentFile].C_Str());
+			_loadOPMFromFile(dropFilenames[currentFile].C_Str());
 			Scale = 1.0f;
 		} else {
 			_processModel(dropFilenames[currentFile].C_Str());
