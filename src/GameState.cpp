@@ -109,13 +109,19 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	activeSkeleton = NULL;
 
 	if (exporter.HasAnimations) {
-		OPstream* stream = OPfile::ReadFromFile(filename);
+		//OPstream* stream = OPfile::ReadFromFile(filename);
 		// Get Skeleton
-		OPskeleton* skeleton = exporter.LoadSkeleton(stream);
+		OPskeleton* skeleton = exporter.LoadSkeleton();
 		activeSkeleton = skeleton;
 
 		// Get Animations
-		animations = exporter.LoadAnimations();
+		if (splitterIndex == 0) {
+			animations = exporter.LoadAnimations();
+		}
+		else {
+			animations = exporter.LoadAnimations(splitters, splitterIndex);
+		}
+
 		if (animations.AnimationsCount > 0) {
 			activeAnimation = animations.Animations[0];
 		}
@@ -325,7 +331,12 @@ void ExporterState::Render(OPfloat delta) {
 			sprintf(buffer, "Export %s", outputFilename->C_Str());
 
 			if (ImGui::Button(buffer, ImVec2((OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScaled), 25))) {
-				exporter.Export(outputAbsolutePath->C_Str());
+				if (splitterIndex == 0) {
+					exporter.Export(outputAbsolutePath->C_Str());
+				}
+				else {
+					exporter.Export(splitters, splitterIndex, outputAbsolutePath->C_Str());
+				}
 			}
 
 			ImGui::End();
@@ -347,7 +358,9 @@ void ExporterState::Render(OPfloat delta) {
 		ImGui::Begin("SelectorAnimations", &always, ImVec2(windowWidth / 2, 36), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 		if (outputFilename != NULL) {
 			ImGui::PushItemWidth(-1.0f);
-			ImGui::Combo("Animations", &ind, ItemGetter, animations.AnimationNames, animations.AnimationsCount);
+			if (ImGui::Combo("Animations", &ind, ItemGetter, animations.AnimationNames, animations.AnimationsCount)) {
+				activeAnimation = animations.Animations[ind];
+			}
 		}
 		ImGui::End();
 	}
@@ -373,6 +386,23 @@ void ExporterState::Render(OPfloat delta) {
 		ImGui::End();
 
 		//ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 0.8;
+	}
+
+	{
+		if (activeSkeleton != NULL) {
+			ImGui::Begin("CurrentSkeleton", &always, ImVec2(200, 400), 0.0f);
+
+			for (ui32 i = 0; i < activeSkeleton->hierarchyCount; i++) {
+				if (activeSkeleton->hierarchy[i] >= 0) {
+					ImGui::Text("%s ( %d ) : %s ( %d )", activeSkeleton->jointNames[i], i, activeSkeleton->jointNames[activeSkeleton->hierarchy[i]], activeSkeleton->hierarchy[i]);
+				}
+				else {
+					ImGui::Text("%s ( %d ) : ROOT", activeSkeleton->jointNames[i], i);
+				}
+			}
+
+			ImGui::End();
+		}
 	}
 
 	{ // Render Animations Window
@@ -442,32 +472,48 @@ void ExporterState::_processTexture(const OPchar* filename) {
 }
 
 void ExporterState::_processAnimations(const OPchar* filename) {
+	if (splitterIndex > 0) {
+		for (ui32 i = 0; i < splitterIndex; i++) {
+			OPfree(splitters[i].Name);
+		}
+		splitterIndex = 0;
+	}
 
 	//SplittersIndex = 0;
-	//// Assume it's an animation splitter file
-	//ifstream myFile(filename);
-	//OPchar str[255];
-	//if (myFile.is_open()) {
-	//	while (!myFile.eof()) {
-	//		myFile.getline(str, 255);
-	//		// Parse out each line
-	//		if (OPstringCount(str, ':') != 2) continue;
-	//		// Must have exactly 2 :'s
+	// Assume it's an animation splitter file
+	ifstream myFile(filename);
+	OPchar str[255];
+	if (myFile.is_open()) {
+		while (!myFile.eof()) {
+			myFile.getline(str, 255);
+			// Parse out each line
+			if (OPstringCount(str, ':') != 2) continue;
+			// Must have exactly 2 :'s
 
-	//		ui32 colonPos = OPstringFirst(str, ':');
-	//		OPchar* start = OPstringSub(str, 0, colonPos);
-	//		OPchar* secondPart = &str[colonPos + 1];
-	//		colonPos = OPstringFirst(&str[1], ':');
-	//		OPchar* end = OPstringSub(secondPart, 0, colonPos + 1);
-	//		OPchar* name = &secondPart[colonPos + 2];
+			ui32 colonPos = OPstringFirst(str, ':');
+			OPchar* start = OPstringSub(str, 0, colonPos);
+			OPchar* secondPart = &str[colonPos + 1];
+			colonPos = OPstringFirst(&str[1], ':');
+			OPchar* end = OPstringSub(secondPart, 0, colonPos + 1);
+			OPchar* name = &secondPart[colonPos + 2];
 
-	//		SplittersStart[SplittersIndex] = atoi(start);
-	//		SplittersEnd[SplittersIndex] = atoi(end);
-	//		SplittersName[SplittersIndex] = OPstringCopy(name);
-	//		SplittersIndex++;
+			splitters[splitterIndex].Start = atoi(start);
+			splitters[splitterIndex].End = atoi(end);
+			splitters[splitterIndex].Name = OPstringCopy(name);
+			splitterIndex++;
+		}
 
-	//	}
-	//}
+		if (splitterIndex > 0 && activeAnimation != NULL) {
+			// Reload animations
+			animations = exporter.LoadAnimations(splitters, splitterIndex);
+			if (animations.AnimationsCount > 0) {
+				activeAnimation = animations.Animations[0];
+			}
+			else {
+				activeAnimation = NULL;
+			}
+		}
+	}
 }
 
 void ExporterState::_processModel(const OPchar* filename) {
@@ -569,7 +615,7 @@ void ExporterState::_processDroppedFiles() {
 	else if (IsAnimationFile(ext)) { // Process as animation file
 		_processAnimations(dropFilenames[currentFile].C_Str());
 	}
-	else if(IsModelFile(ext)) { // Process as model file
+	else if (IsModelFile(ext)) { // Process as model file
 
 		camera.Rotation.x = -0.644917190;
 		camera.Rotation.y = -0.785485148;
@@ -580,9 +626,29 @@ void ExporterState::_processDroppedFiles() {
 		if (OPstringEquals(ext, ".opm")) { // Doesn't go through Assimp for OPM files
 			_loadOPMFromFile(dropFilenames[currentFile].C_Str());
 			Scale = 1.0f;
-		} else {
+		}
+		else {
 			_processModel(dropFilenames[currentFile].C_Str());
 		}
+	}
+	else if (IsSkeltonFile(ext)) { // Process as model file
+
+		OPskeleton* skel = (OPskeleton*)OPCMAN.LoadFromFile(dropFilenames[currentFile].C_Str());
+		if (skel != NULL) {
+			activeSkeleton = skel;
+			activeAnimation = NULL;
+		}
+	}
+	else if (IsSkeletonAnimationFile(ext) && activeSkeleton != NULL) { // Process as model file
+		activeAnimation = (OPskeletonAnimation*)OPCMAN.LoadFromFile(dropFilenames[currentFile].C_Str());
+		
+		//if (anim != NULL && activeSkeleton->hierarchyCount == anim->BoneCount) {
+
+		//	OPlogErr("TEST");
+		//	activeAnimation == anim;
+		//	OPlogErr("%p", activeAnimation);
+
+		//}
 	}
 
 	currentFile++;

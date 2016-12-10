@@ -18,6 +18,7 @@ void ApplicationInit() {
     #ifdef ADDON_assimp
     	OPassimpAddLoaders();
     #endif
+		OPskeletonAnimationAddLoader();
 
 	OPrenderSetup();
 

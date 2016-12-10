@@ -23,6 +23,9 @@ struct ExporterState {
     bool getThumbnail = false;
 	bool useAnimation = false;
 
+	ui32 splitterIndex = 0;
+	AnimationSplit splitters[100];
+
 	void Init();
 	OPint Update(OPtimer* timer);
 	void Render(OPfloat delta);
