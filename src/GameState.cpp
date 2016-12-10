@@ -270,7 +270,7 @@ void ExporterState::Render(OPfloat delta) {
 		if (outputFilename != NULL) {
 
 			ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiSetCond_::ImGuiSetCond_FirstUseEver);
-			ImGui::Begin("Settings", &always, ImVec2(250, 400), -1.0F, ImGuiWindowFlags_NoResize);
+			ImGui::Begin("Settings", &always, ImVec2(250, 430), -1.0F, ImGuiWindowFlags_NoResize);
 
 			ImGui::Checkbox("Normals", &exporter.Feature_Normals);
 			ImGui::Checkbox("UVs", &exporter.Feature_UVs);
@@ -389,20 +389,20 @@ void ExporterState::Render(OPfloat delta) {
 	}
 
 	{
-		if (activeSkeleton != NULL) {
-			ImGui::Begin("CurrentSkeleton", &always, ImVec2(200, 400), 0.0f);
+		//if (activeSkeleton != NULL) {
+		//	ImGui::Begin("CurrentSkeleton", &always, ImVec2(200, 400), 0.0f);
 
-			for (ui32 i = 0; i < activeSkeleton->hierarchyCount; i++) {
-				if (activeSkeleton->hierarchy[i] >= 0) {
-					ImGui::Text("%s ( %d ) : %s ( %d )", activeSkeleton->jointNames[i], i, activeSkeleton->jointNames[activeSkeleton->hierarchy[i]], activeSkeleton->hierarchy[i]);
-				}
-				else {
-					ImGui::Text("%s ( %d ) : ROOT", activeSkeleton->jointNames[i], i);
-				}
-			}
+		//	for (ui32 i = 0; i < activeSkeleton->hierarchyCount; i++) {
+		//		if (activeSkeleton->hierarchy[i] >= 0) {
+		//			ImGui::Text("%s ( %d ) : %s ( %d )", activeSkeleton->jointNames[i], i, activeSkeleton->jointNames[activeSkeleton->hierarchy[i]], activeSkeleton->hierarchy[i]);
+		//		}
+		//		else {
+		//			ImGui::Text("%s ( %d ) : ROOT", activeSkeleton->jointNames[i], i);
+		//		}
+		//	}
 
-			ImGui::End();
-		}
+		//	ImGui::End();
+		//}
 	}
 
 	{ // Render Animations Window
