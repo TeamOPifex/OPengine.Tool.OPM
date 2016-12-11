@@ -446,17 +446,22 @@ void ExporterState::_processTexture(const OPchar* filename) {
 
 	result = tex;
 
-    #ifdef OPIFEX_WINDOWS
-       const OPchar* ext = strrchr(filename, '\\');
-    #else
-       const OPchar* ext = strrchr(filename, '/');
-    #endif
-    OPchar* justTexName = OPstringCopy(&ext[1]);
+
+	OPstring texName(filename);
+	OPint pos = texName.IndexOfLast('\\');
+	if (pos != -1) {
+		texName.Init(&texName._data[pos + 1]);
+	}
+
+	pos = texName.IndexOfLast('/');
+	if (pos != -1) {
+		texName.Init(&texName._data[pos + 1]);
+	}
 
 
 	for (ui32 i = 0; i < entity->model->meshCount; i++) {
         entity->SetAlbedoMap(tex, i);
-        entity->model->meshes[i].materialDesc->diffuse = justTexName;
+        entity->model->meshes[i].materialDesc->diffuse = OPstringCopy(texName.C_Str());
     }
 	//materialInstance->SetAlbedoMap(tex);
 
@@ -626,6 +631,55 @@ void ExporterState::_processDroppedFiles() {
 		if (OPstringEquals(ext, ".opm")) { // Doesn't go through Assimp for OPM files
 			_loadOPMFromFile(dropFilenames[currentFile].C_Str());
 			Scale = 1.0f;
+
+			OPstring dir(dropFilenames[currentFile].C_Str());
+			OPstring filename(dropFilenames[currentFile].C_Str());
+
+			RemoveFilename(&dir);
+			RemoveDirectory(&filename);
+
+			ui32 fileCount = 0;
+			OPchar** files = OPfile::GetDirectoryFiles(dir.C_Str(), &fileCount);
+
+			ui32 totalAnimCount = 0;
+			for (ui32 i = 0; i < fileCount; i++) {
+				OPstring f(files[i]);
+				bool startWith = f.StartsWith(filename.C_Str());
+				bool endsWith = f.EndsWith(".anim");
+
+				if (startWith && endsWith) {
+					totalAnimCount++;
+				}
+			}
+
+			animations.AnimationNames = OPALLOC(OPchar*, totalAnimCount);
+			animations.Animations = OPALLOC(OPskeletonAnimation*, totalAnimCount);
+			ui32 ind = 0;
+			for (ui32 i = 0; i < fileCount; i++) {
+				OPstring f(files[i]);
+				bool startWith = f.StartsWith(filename.C_Str());
+				bool endsWith = f.EndsWith(".anim");
+
+				if (startWith && endsWith) {
+					f.Resize(f._len - 5);
+
+					OPlogErr("Anim File: %s", files[i]);
+
+					OPstring absPath(dir.C_Str());
+					absPath.Add(files[i]);
+
+					animations.Animations[ind] = (OPskeletonAnimation*)OPCMAN.LoadFromFile(absPath.C_Str());
+					animations.AnimationNames[ind] = OPstringCopy(&f._data[filename._len + 1]);
+					ind++;
+				}
+			}
+
+			animations.AnimationsCount = totalAnimCount;
+
+			if (totalAnimCount > 0) {
+				activeAnimation = animations.Animations[0];
+			}
+
 		}
 		else {
 			_processModel(dropFilenames[currentFile].C_Str());
