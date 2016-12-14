@@ -19,6 +19,7 @@ struct ExporterState {
 	OPrendererEntity* entity;
 	OPstring* outputFilename = NULL;
 	OPstring* outputAbsolutePath = NULL;
+	bool autoScale = false;
 	bool autoExport = false;
     bool getThumbnail = false;
 	bool useAnimation = false;

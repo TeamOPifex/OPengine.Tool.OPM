@@ -15,7 +15,26 @@ OPskeletonAnimationResult animations = { NULL, 0 };
 OPskeletonAnimation* activeAnimation = NULL;
 
 bool ItemGetter(void* source, int pos, const char** result) {
-	*result = animations.AnimationNames[pos];
+		*result = animations.AnimationNames[pos];
+	return true;
+}
+
+const OPchar* text_all = "All";
+const OPchar* text_mesh = "Mesh";
+
+bool MeshNameGetter(void* source, int pos, const char** result) {
+	OPmodel* model = (OPmodel*)source;
+	if (pos == 0) {
+		*result = text_all;
+	}
+	else {
+		if (model->meshes[pos - 1].name == NULL) {
+			*result = text_mesh;
+		}
+		else {
+			*result = model->meshes[pos - 1].name;
+		}
+	}
 	return true;
 }
 
@@ -226,7 +245,9 @@ void ExporterState::Init() {
 }
 
 OPint ExporterState::Update(OPtimer* timer) {
-	camera.Update(timer);
+	if (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->HasFocus()) {
+		camera.Update(timer);
+	}
 	scene.Update(timer);
 	entity->world.SetScl(Scale)->Translate(0, -1.0 * Scale * bounds.min.y, 0);
 
@@ -241,6 +262,7 @@ OPint ExporterState::Update(OPtimer* timer) {
 }
 
 int ind = 0;
+int meshInd = 0;
 char* items = "test\0two\0three";
 
 void ExporterState::Render(OPfloat delta) {
@@ -286,9 +308,11 @@ void ExporterState::Render(OPfloat delta) {
 			ImGui::Spacing();
 
 			ImGui::Text("Scale");
+			ImGui::Checkbox("Auto-Scale on drop", &autoScale);
 			if (ImGui::Button("Default")) {
 				Scale = 1.0f;
 			}
+			ImGui::SameLine(0);
 			if (ImGui::Button("CM -> Meters")) {
 				Scale = 0.01f;
 			}
@@ -324,13 +348,13 @@ void ExporterState::Render(OPfloat delta) {
 
 	{ // Render Export Window
 		if (outputFilename != NULL) {
-			ImGui::SetNextWindowPos(ImVec2(0, (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->HeightScaled) - 41));
-			ImGui::Begin("OverlayExport", &always, ImVec2((OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScaled), 41), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+			ImGui::SetNextWindowPos(ImVec2(0, (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->HeightScale) - 41));
+			ImGui::Begin("OverlayExport", &always, ImVec2((OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScale), 41), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
 			char buffer[255];
 			sprintf(buffer, "Export %s", outputFilename->C_Str());
 
-			if (ImGui::Button(buffer, ImVec2((OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScaled), 25))) {
+			if (ImGui::Button(buffer, ImVec2((OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScale), 25))) {
 				if (splitterIndex == 0) {
 					exporter.Export(outputAbsolutePath->C_Str());
 				}
@@ -343,14 +367,23 @@ void ExporterState::Render(OPfloat delta) {
 		}
 	}
 
-	ui32 windowWidth = (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScaled);
+	ui32 windowWidth = (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScale);
 
 	{ // Render Select Window
 		ImGui::SetNextWindowPos(ImVec2(0, 0));
 		ImGui::Begin("SelectorMeshes", &always, ImVec2(windowWidth / 2, 36), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 		if (outputFilename != NULL) {
 			ImGui::PushItemWidth(-1.0f);
-			ImGui::Combo("Meshes", &ind, items);
+			if (ImGui::Combo("Meshes", &meshInd, MeshNameGetter, entity->model, entity->model->meshCount + 1)) {
+				for (ui32 i = 0; i < entity->model->meshCount; i++) {
+					if (meshInd == 0 || i == (meshInd - 1)) {
+						entity->material[i]->visible = true;
+					}
+					else {
+						entity->material[i]->visible = false;
+					}
+				}
+			}
 		}
 		ImGui::End();
 
@@ -364,10 +397,7 @@ void ExporterState::Render(OPfloat delta) {
 		}
 		ImGui::End();
 	}
-
-
-	//ImGui::ShowTestWindow();
-
+	
 	if (result != NULL) {
 		ImGui::SetNextWindowPos(ImVec2(windowWidth - 128 - 16 - 4, 40));
 		ui32 childWindowWidth = 128 + 16;
@@ -384,50 +414,6 @@ void ExporterState::Render(OPfloat delta) {
 		ImGui::Text("Diffuse");
 
 		ImGui::End();
-
-		//ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 0.8;
-	}
-
-	{
-		//if (activeSkeleton != NULL) {
-		//	ImGui::Begin("CurrentSkeleton", &always, ImVec2(200, 400), 0.0f);
-
-		//	for (ui32 i = 0; i < activeSkeleton->hierarchyCount; i++) {
-		//		if (activeSkeleton->hierarchy[i] >= 0) {
-		//			ImGui::Text("%s ( %d ) : %s ( %d )", activeSkeleton->jointNames[i], i, activeSkeleton->jointNames[activeSkeleton->hierarchy[i]], activeSkeleton->hierarchy[i]);
-		//		}
-		//		else {
-		//			ImGui::Text("%s ( %d ) : ROOT", activeSkeleton->jointNames[i], i);
-		//		}
-		//	}
-
-		//	ImGui::End();
-		//}
-	}
-
-	{ // Render Animations Window
-		//ImGui::ShowTestWindow();
-
-		//if (totalAnimationTracks > 0) {
-
-		//	ImGui::SetNextWindowPos(ImVec2(10, 310));
-		//	ImGui::Begin("OverlayAnimations", &alwaysShow, ImVec2(200, 20 * totalAnimationTracks), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-		//	for (ui32 i = 0; i < totalAnimationTracks; i++) {
-		//		ImGui::Text("%s : %d frames", AnimationTracks[i], (int)AnimationDurations[i]);
-		//	}
-		//	ImGui::End();
-
-		//	if (SplittersIndex > 0) {
-		//		ImGui::SetNextWindowPos(ImVec2(10, 330 + 20 * totalAnimationTracks));
-		//		ImGui::Begin("OverlaySplitters", &alwaysShow, ImVec2(200, 20 * SplittersIndex), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-		//		for (ui32 i = 0; i < SplittersIndex; i++) {
-		//			ImGui::Text("%s : %d - %d", SplittersName[i], SplittersStart[i], SplittersEnd[i]);
-		//		}
-		//		ImGui::End();
-		//	}
-		//}
 	}
 
 	ImGui::Render();
@@ -458,22 +444,16 @@ void ExporterState::_processTexture(const OPchar* filename) {
 		texName.Init(&texName._data[pos + 1]);
 	}
 
-
-	for (ui32 i = 0; i < entity->model->meshCount; i++) {
-        entity->SetAlbedoMap(tex, i);
-        entity->model->meshes[i].materialDesc->diffuse = OPstringCopy(texName.C_Str());
-    }
-	//materialInstance->SetAlbedoMap(tex);
-
-	//if (materialInstancesArr != NULL) {
-	//	// Set the current materials albedo texture
-	//	materialPBRInstancesArr[texInd]->SetAlbedoMap(tex);
-	//}
-
-	// Set Meta
-
-	//metaData[0].dataSize = strlen(justTexName) * sizeof(OPchar);
-	//metaData[0].data = justTexName;
+	if (meshInd == 0) {
+		for (ui32 i = 0; i < entity->model->meshCount; i++) {
+			entity->SetAlbedoMap(tex, i);
+			entity->model->meshes[i].materialDesc->diffuse = OPstringCopy(texName.C_Str());
+		}
+	}
+	else {
+		entity->SetAlbedoMap(tex, meshInd - 1);
+		entity->model->meshes[meshInd - 1].materialDesc->diffuse = OPstringCopy(texName.C_Str());
+	}
 }
 
 void ExporterState::_processAnimations(const OPchar* filename) {
@@ -524,9 +504,9 @@ void ExporterState::_processAnimations(const OPchar* filename) {
 void ExporterState::_processModel(const OPchar* filename) {
 	if (!_loadMeshFromFile(filename)) return;
 
-	//if (OPvec3Len(bounds.max - bounds.min) > 80) {
-	//	Scale = 0.01f;
-	//}
+	if (autoScale && OPvec3Len(bounds.max - bounds.min) > 80) {
+		Scale = 0.01f;
+	}
 
 	if (autoExport) {
 		exporter.Export(outputAbsolutePath->C_Str());
