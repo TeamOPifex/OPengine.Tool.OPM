@@ -64,6 +64,7 @@ bool ExporterState::_loadOPMFromFile(const OPchar* filename) {
 			//	activeAnimation = NULL;
 			//}
 		}
+        stream->Destroy();
 	}
 
 	if (activeSkeleton != NULL) {
@@ -72,7 +73,7 @@ bool ExporterState::_loadOPMFromFile(const OPchar* filename) {
 	else {
 		entity = scene.Add(model, OPrendererEntityDesc(false, true, true, true));
 	}
-	
+
 	// Setup the materials per mesh in the model
 	for (ui32 i = 0; i < model->meshCount; i++) {
 		if (model->meshes[i].materialDesc == NULL) continue;
@@ -120,7 +121,7 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	if (exporter.scene == NULL) {
 		return false;
 	}
-	
+
 	bounds = OPboundingBox3D();
 
 	scene.Remove(entity);
@@ -161,7 +162,7 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	// Setup the materials per mesh in the model
 	for (ui32 i = 0; i < model->meshCount; i++) {
 		if (model->meshes[i].materialDesc == NULL) continue;
-		
+
 
 		if (model->meshes[i].boundingBox.min.x < bounds.min.x) bounds.min.x = model->meshes[i].boundingBox.min.x;
 		if (model->meshes[i].boundingBox.min.y < bounds.min.y) bounds.min.y = model->meshes[i].boundingBox.min.y;
@@ -238,10 +239,10 @@ void ExporterState::Init() {
 	entity->SetAlbedoMap("Default_Albedo.png");
 	entity->world.SetScl(Scale)->Translate(0, (bounds.max.y - bounds.min.y) / 2.0f, 0);
 
-	OPmodel* ground = OPquadCreateZPlane(10.0f, 10.0f);
-	OPrendererEntity* groundEnt = scene.Add(model, OPrendererEntityDesc(false, true, true, false));
-	groundEnt->SetAlbedoMap("Default_Normals.png");
-	groundEnt->world.SetScl(10, 0.1, 10)->Translate(0, -0.05, 0);
+	// OPmodel* ground = OPquadCreateZPlane(10.0f, 10.0f);
+	// OPrendererEntity* groundEnt = scene.Add(model, OPrendererEntityDesc(false, true, true, false));
+	// groundEnt->SetAlbedoMap("Default_Normals.png");
+	// groundEnt->world.SetScl(10, 0.1, 10)->Translate(0, -0.05, 0);
 }
 
 OPint ExporterState::Update(OPtimer* timer) {
@@ -251,11 +252,12 @@ OPint ExporterState::Update(OPtimer* timer) {
 	scene.Update(timer);
 	entity->world.SetScl(Scale)->Translate(0, -1.0 * Scale * bounds.min.y, 0);
 
-	if (useAnimation && activeAnimation != NULL && activeSkeleton != NULL) {
-		OPskeletonAnimationUpdate(activeAnimation, timer);
-		OPskeletonAnimationApply(activeAnimation, activeSkeleton);
-	}
+	// if (useAnimation && activeAnimation != NULL && activeSkeleton != NULL) {
+	// 	OPskeletonAnimationUpdate(activeAnimation, timer);
+	// 	OPskeletonAnimationApply(activeAnimation, activeSkeleton);
+	// }
 	if (activeSkeleton != NULL) {
+        activeSkeleton->Reset();
 		OPskeletonUpdate(activeSkeleton);
 	}
 	return false;
@@ -348,13 +350,13 @@ void ExporterState::Render(OPfloat delta) {
 
 	{ // Render Export Window
 		if (outputFilename != NULL) {
-			ImGui::SetNextWindowPos(ImVec2(0, (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->HeightScale) - 41));
-			ImGui::Begin("OverlayExport", &always, ImVec2((OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScale), 41), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+			ImGui::SetNextWindowPos(ImVec2(0, OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height - 41));
+			ImGui::Begin("OverlayExport", &always, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width, 41), 0.3f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
 			char buffer[255];
 			sprintf(buffer, "Export %s", outputFilename->C_Str());
 
-			if (ImGui::Button(buffer, ImVec2((OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScale), 25))) {
+			if (ImGui::Button(buffer, ImVec2(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width, 25))) {
 				if (splitterIndex == 0) {
 					exporter.Export(outputAbsolutePath->C_Str());
 				}
@@ -367,7 +369,7 @@ void ExporterState::Render(OPfloat delta) {
 		}
 	}
 
-	ui32 windowWidth = (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width / OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WidthScale);
+	ui32 windowWidth = OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width;
 
 	{ // Render Select Window
 		ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -397,7 +399,7 @@ void ExporterState::Render(OPfloat delta) {
 		}
 		ImGui::End();
 	}
-	
+
 	if (result != NULL) {
 		ImGui::SetNextWindowPos(ImVec2(windowWidth - 128 - 16 - 4, 40));
 		ui32 childWindowWidth = 128 + 16;
@@ -533,8 +535,8 @@ void windowDump(OPstring* out) {
 	char fname[32];
 	ui8 *image, *image2;
 
-	ui32 width = OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width;
-	ui32 height = OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Height;
+	ui32 width = OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WindowWidth;
+	ui32 height = OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->WindowHeight;
 
 	/* Allocate our buffer for the image */
 	if ((image = (ui8*)OPalloc(3 * width*height * sizeof(char))) == NULL) {
@@ -566,6 +568,8 @@ void windowDump(OPstring* out) {
 	OPstring* output = out->Copy();
 	output->Add(".png");
 	OPimagePNGCreate24(image2, width, height, output->C_Str());
+    OPfree(image);
+    OPfree(image2);
 	delete output;
 
 }
@@ -576,7 +580,7 @@ void ExporterState::_processDroppedFiles() {
 		return;
 	}
 
-	if (currentFile <= dropCount && currentFile != 0) {
+	if (outputAbsolutePath != NULL && currentFile <= dropCount && currentFile != 0) {
 		OPuint prevFile = currentFile - 1;
 		// Grab a snapshot
 		windowDump(outputAbsolutePath);
@@ -675,7 +679,7 @@ void ExporterState::_processDroppedFiles() {
 	}
 	else if (IsSkeletonAnimationFile(ext) && activeSkeleton != NULL) { // Process as model file
 		activeAnimation = (OPskeletonAnimation*)OPCMAN.LoadFromFile(dropFilenames[currentFile].C_Str());
-		
+
 		//if (anim != NULL && activeSkeleton->hierarchyCount == anim->BoneCount) {
 
 		//	OPlogErr("TEST");
