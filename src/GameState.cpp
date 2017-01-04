@@ -239,10 +239,10 @@ void ExporterState::Init() {
 	entity->SetAlbedoMap("Default_Albedo.png");
 	entity->world.SetScl(Scale)->Translate(0, (bounds.max.y - bounds.min.y) / 2.0f, 0);
 
-	// OPmodel* ground = OPquadCreateZPlane(10.0f, 10.0f);
-	// OPrendererEntity* groundEnt = scene.Add(model, OPrendererEntityDesc(false, true, true, false));
-	// groundEnt->SetAlbedoMap("Default_Normals.png");
-	// groundEnt->world.SetScl(10, 0.1, 10)->Translate(0, -0.05, 0);
+	 OPmodel* ground = OPquadCreateZPlane(1.0f, 1.0f, OPvec2(0,0), OPvec2(16, 16), (ui32)OPattributes::POSITION | (ui32)OPattributes::NORMAL | (ui32)OPattributes::TANGENT | (ui32)OPattributes::BITANGENT | (ui32)OPattributes::UV);
+	 OPrendererEntity* groundEnt = scene.Add(ground, OPrendererEntityDesc(false, true, true, false));
+	 groundEnt->SetAlbedoMap("Tile2.png");
+	 groundEnt->world.SetScl(10, 0.1, 10)->Translate(0, -0.05, 0);
 }
 
 OPint ExporterState::Update(OPtimer* timer) {
@@ -318,7 +318,7 @@ void ExporterState::Render(OPfloat delta) {
 			if (ImGui::Button("CM -> Meters")) {
 				Scale = 0.01f;
 			}
-			ImGui::SliderFloat("Scale", &Scale, 0.001f, 4.0f);
+			ImGui::SliderFloat("Scale", &Scale, 0.001f, 100.0f);
 
 			ImGui::Spacing();
 			ImGui::Separator();
