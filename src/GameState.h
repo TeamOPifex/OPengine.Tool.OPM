@@ -23,6 +23,7 @@ struct ExporterState {
 	bool autoExport = false;
     bool getThumbnail = false;
 	bool useAnimation = false;
+	bool animsFromFile = false;
 
 	ui32 splitterIndex = 0;
 	AnimationSplit splitters[100];

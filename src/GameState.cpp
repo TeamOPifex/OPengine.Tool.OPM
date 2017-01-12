@@ -111,6 +111,9 @@ bool ExporterState::_loadOPMFromFile(const OPchar* filename) {
 bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	const OPchar* ext = NULL;
 
+	if (!animsFromFile) {
+		splitterIndex = 0;
+	}
 
 	//OPmodel* model = (OPmodel*)OPCMAN.LoadFromFile(filename);
 	//if (model == NULL) return false;
@@ -134,9 +137,27 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 		OPskeleton* skeleton = exporter.LoadSkeleton();
 		activeSkeleton = skeleton;
 
+		useAnimation = true;
+
 		// Get Animations
 		if (splitterIndex == 0) {
-			animations = exporter.LoadAnimations();
+			OPstring str(filename);
+			if (str.Contains("_")) {
+				ui32 ind = str.IndexOfLast('_');
+				ui32 indEnd = str.IndexOfLast('.');
+				OPstring* result = str.Substr(ind + 1, indEnd);
+				animations = exporter.LoadAnimations(result->C_Str());
+
+				splitterIndex = 1;
+				splitters[0].Start = 0;
+				splitters[0].End = animations.Animations[0]->FrameCount;
+				splitters[0].Name = animations.AnimationNames[0];
+				
+				OPfree(result);
+			}
+			else {
+				animations = exporter.LoadAnimations();
+			}
 		}
 		else {
 			animations = exporter.LoadAnimations(splitters, splitterIndex);
@@ -252,20 +273,25 @@ OPint ExporterState::Update(OPtimer* timer) {
 	scene.Update(timer);
 	entity->world.SetScl(Scale)->Translate(0, -1.0 * Scale * bounds.min.y, 0);
 
-	// if (useAnimation && activeAnimation != NULL && activeSkeleton != NULL) {
-	// 	OPskeletonAnimationUpdate(activeAnimation, timer);
-	// 	OPskeletonAnimationApply(activeAnimation, activeSkeleton);
-	// }
-	if (activeSkeleton != NULL) {
+	 if (useAnimation && activeAnimation != NULL && activeSkeleton != NULL) {
+	 	OPskeletonAnimationUpdate(activeAnimation, timer);
+	 	OPskeletonAnimationApply(activeAnimation, activeSkeleton);
+		OPskeletonUpdate(activeSkeleton);
+	 } else if (activeSkeleton != NULL) {
         activeSkeleton->Reset();
 		OPskeletonUpdate(activeSkeleton);
-	}
+	 }
 	return false;
 }
 
 int ind = 0;
 int meshInd = 0;
+int AnimStart = 0, AnimEnd = 0;
+char AnimName[100];
+
 char* items = "test\0two\0three";
+
+bool showAddAnimation = false;
 
 void ExporterState::Render(OPfloat delta) {
 
@@ -291,10 +317,9 @@ void ExporterState::Render(OPfloat delta) {
 	bool show_app_metrics;
 
 	{ // Render Settings Window
-		if (outputFilename != NULL) {
 
 			ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiSetCond_::ImGuiSetCond_FirstUseEver);
-			ImGui::Begin("Settings", &always, ImVec2(250, 430), -1.0F, ImGuiWindowFlags_NoResize);
+			ImGui::Begin("Settings", &always, ImVec2(250, 450), -1.0F, ImGuiWindowFlags_NoResize);
 
 			ImGui::Checkbox("Normals", &exporter.Feature_Normals);
 			ImGui::Checkbox("UVs", &exporter.Feature_UVs);
@@ -318,7 +343,8 @@ void ExporterState::Render(OPfloat delta) {
 			if (ImGui::Button("CM -> Meters")) {
 				Scale = 0.01f;
 			}
-			ImGui::SliderFloat("Scale", &Scale, 0.001f, 100.0f);
+			ImGui::InputFloat("Scale", &Scale, 0.1, 1.0, 6);
+			//ImGui::SliderFloat("Scale", &Scale, 0.001f, 100.0f);
 
 			ImGui::Spacing();
 			ImGui::Separator();
@@ -328,6 +354,10 @@ void ExporterState::Render(OPfloat delta) {
 				if (activeSkeleton != NULL) {
 					activeSkeleton->Reset();
 				}
+			}
+
+			if (ImGui::Button("Show Add Anims")) {
+				showAddAnimation = !showAddAnimation;
 			}
 
 			ImGui::Spacing();
@@ -346,6 +376,38 @@ void ExporterState::Render(OPfloat delta) {
 
 			ImGui::End();
 		}
+	
+
+	if (showAddAnimation) {
+		ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiSetCond_::ImGuiSetCond_FirstUseEver);
+		ImGui::Begin("Add Animation", &always, ImVec2(500, 100), -1.0F, ImGuiWindowFlags_NoResize);
+
+		if (ImGui::Button("Clear Anims")) {
+			useAnimation = false;
+			if (activeSkeleton != NULL) {
+				activeSkeleton->Reset();
+			}
+		}
+
+		ImGui::InputInt("Start", &AnimStart);
+		ImGui::InputInt("End", &AnimEnd);
+		ImGui::InputText("Name", AnimName, 100);
+
+		if (ImGui::Button("Add Anim")) {
+			splitterIndex = 1;
+			splitters[0].Start = AnimStart;
+			splitters[0].End = AnimEnd;
+			splitters[0].Name = AnimName;
+			animations = exporter.LoadAnimations(splitters, splitterIndex);
+			if (animations.AnimationsCount > 0) {
+				activeAnimation = animations.Animations[0];
+			}
+			else {
+				activeAnimation = NULL;
+			}
+		}
+
+		ImGui::End();
 	}
 
 	{ // Render Export Window
@@ -459,6 +521,8 @@ void ExporterState::_processTexture(const OPchar* filename) {
 }
 
 void ExporterState::_processAnimations(const OPchar* filename) {
+	animsFromFile = true;
+
 	if (splitterIndex > 0) {
 		for (ui32 i = 0; i < splitterIndex; i++) {
 			OPfree(splitters[i].Name);
@@ -511,7 +575,12 @@ void ExporterState::_processModel(const OPchar* filename) {
 	}
 
 	if (autoExport) {
-		exporter.Export(outputAbsolutePath->C_Str());
+		if (splitterIndex == 0) {
+			exporter.Export(outputAbsolutePath->C_Str());
+		}
+		else {
+			exporter.Export(splitters, splitterIndex, outputAbsolutePath->C_Str());
+		}
 	}
 }
 
@@ -568,8 +637,8 @@ void windowDump(OPstring* out) {
 	OPstring* output = out->Copy();
 	output->Add(".png");
 	OPimagePNGCreate24(image2, width, height, output->C_Str());
-    OPfree(image);
-    OPfree(image2);
+    //OPfree(image);
+    //OPfree(image2);
 	delete output;
 
 }
