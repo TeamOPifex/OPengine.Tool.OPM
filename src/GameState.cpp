@@ -233,26 +233,24 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 	return true;
 }
 
-void ExporterState::Init() {
+void ExporterState::Init(OPgameState* state) {
 	OPimguiInit(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE, true);
 	ImGui::GetStyle().WindowRounding = 0.0f;
 
 	mainWindow.SetDropCallback(DropCallback);
-
-	fullForwardRenderer = OPrendererFullForward::Create();
-	scene.Init(&fullForwardRenderer->rendererRoot, 1000, 50);
 
 	camera.Init(1.0f, 1.0f, OPvec3(5, 5, 5));
 	camera.Rotation.x = -0.644917190;
 	camera.Rotation.y = -0.785485148;
 	camera.Rotation.z = 0.955316544;
 	camera.Camera.pos = OPvec3(-5, 5, 5);
-	camera.Update();
-	scene.camera = &camera.Camera;
 
 	OPfloat shadowCameraSize = 16.0f;
-	fullForwardRenderer->shadowCamera.SetOrtho(OPvec3(-6, 6, 1), OPVEC3_ZERO, OPVEC3_UP, 0.1f, 15.0f, -shadowCameraSize, shadowCameraSize, -shadowCameraSize, shadowCameraSize);
-	//fullForwardRenderer->shadowCamera.SetOrtho(OPvec3(2), OPVEC3_ZERO, 10.0f);
+	shadowCam.SetOrtho(OPvec3(-6, 6, 1), OPVEC3_ZERO, OPVEC3_UP, 0.1f, 15.0f, -shadowCameraSize, shadowCameraSize, -shadowCameraSize, shadowCameraSize);
+	
+	scene.Init(&fullForwardRenderer, 1000, 50);
+	scene.SetCamera(&camera.Camera);
+	scene.SetShadowCamera(&shadowCam);
 
 	OPmodel* model = (OPmodel*)OPCMAN.LoadGet("box.opm");
 	entity = scene.Add(model, OPrendererEntityDesc(false, true, true, false));
@@ -260,26 +258,26 @@ void ExporterState::Init() {
 	entity->SetAlbedoMap("Default_Albedo.png");
 	entity->world.SetScl(Scale)->Translate(0, (bounds.max.y - bounds.min.y) / 2.0f, 0);
 
-	 OPmodel* ground = OPquadCreateZPlane(1.0f, 1.0f, OPvec2(0,0), OPvec2(16, 16), (ui32)OPattributes::POSITION | (ui32)OPattributes::NORMAL | (ui32)OPattributes::TANGENT | (ui32)OPattributes::BITANGENT | (ui32)OPattributes::UV);
-	 OPrendererEntity* groundEnt = scene.Add(ground, OPrendererEntityDesc(false, true, true, false));
-	 groundEnt->SetAlbedoMap("Tile2.png");
-	 groundEnt->world.SetScl(10, 0.1, 10)->Translate(0, -0.05, 0);
+	OPmodel* ground = OPquadCreateZPlane(1.0f, 1.0f, OPvec2(0,0), OPvec2(16, 16), (ui32)OPattributes::POSITION | (ui32)OPattributes::NORMAL | (ui32)OPattributes::TANGENT | (ui32)OPattributes::BITANGENT | (ui32)OPattributes::UV);
+	OPrendererEntity* groundEnt = scene.Add(ground, OPrendererEntityDesc(false, true, true, false));
+	groundEnt->SetAlbedoMap("Tile2.png");
+	groundEnt->world.SetScl(10, 0.1, 10)->Translate(0, -0.05, 0);
 }
 
 OPint ExporterState::Update(OPtimer* timer) {
-	if (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->HasFocus()) {
+	//if (OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->HasFocus()) {
 		camera.Update(timer);
-	}
+	//}
 	scene.Update(timer);
 	entity->world.SetScl(Scale)->Translate(0, -1.0 * Scale * bounds.min.y, 0);
 
 	 if (useAnimation && activeAnimation != NULL && activeSkeleton != NULL) {
-	 	OPskeletonAnimationUpdate(activeAnimation, timer);
-	 	OPskeletonAnimationApply(activeAnimation, activeSkeleton);
-		OPskeletonUpdate(activeSkeleton);
+	 	activeAnimation->Update(timer);
+	 	activeAnimation->Apply(activeSkeleton);
+		activeSkeleton->Update();
 	 } else if (activeSkeleton != NULL) {
         activeSkeleton->Reset();
-		OPskeletonUpdate(activeSkeleton);
+		activeSkeleton->Update();
 	 }
 	return false;
 }
@@ -292,6 +290,7 @@ char AnimName[100];
 char* items = "test\0two\0three";
 
 bool showAddAnimation = false;
+bool showSkeleton = false;
 
 void ExporterState::Render(OPfloat delta) {
 
@@ -360,6 +359,10 @@ void ExporterState::Render(OPfloat delta) {
 				showAddAnimation = !showAddAnimation;
 			}
 
+			if (ImGui::Button("Show Skeleton")) {
+				showSkeleton = !showSkeleton;
+			}
+
 			ImGui::Spacing();
 			ImGui::Separator();
 			ImGui::Spacing();
@@ -377,6 +380,11 @@ void ExporterState::Render(OPfloat delta) {
 			ImGui::End();
 		}
 	
+	if (showSkeleton && activeSkeleton != NULL) {
+		ImGui::Begin("Skeleton");
+		OPimguiDebug(activeSkeleton);
+		ImGui::End();
+	}
 
 	if (showAddAnimation) {
 		ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiSetCond_::ImGuiSetCond_FirstUseEver);
@@ -441,10 +449,10 @@ void ExporterState::Render(OPfloat delta) {
 			if (ImGui::Combo("Meshes", &meshInd, MeshNameGetter, entity->model, entity->model->meshCount + 1)) {
 				for (ui32 i = 0; i < entity->model->meshCount; i++) {
 					if (meshInd == 0 || i == (meshInd - 1)) {
-						entity->material[i]->visible = true;
+						entity->material[i].visible = true;
 					}
 					else {
-						entity->material[i]->visible = false;
+						entity->material[i].visible = false;
 					}
 				}
 			}
@@ -485,7 +493,7 @@ void ExporterState::Render(OPfloat delta) {
 	OPrenderPresent();
 }
 
-OPint ExporterState::Exit() {
+OPint ExporterState::Exit(OPgameState* state) {
 	return 0;
 }
 
@@ -776,19 +784,8 @@ void ExporterState::_drop(OPuint count, const OPchar** filenames) {
 
 
 // Hookups for the game state
-ExporterState exporterState;
-void ExampleStateInit(OPgameState* last) { exporterState.Init(); }
-OPint ExampleStateUpdate(OPtimer* time) { return exporterState.Update(time); }
-void ExampleStateRender(OPfloat delta) { exporterState.Render(delta); }
-OPint ExampleStateExit(OPgameState* next) { return exporterState.Exit(); }
+ExporterState GS_EXAMPLE;
 
 void DropCallback(OPuint count, const OPchar** filenames) {
-	exporterState._drop(count, filenames);
+	GS_EXAMPLE._drop(count, filenames);
 }
-
-OPgameState GS_EXAMPLE = {
-	ExampleStateInit,
-	ExampleStateUpdate,
-	ExampleStateRender,
-	ExampleStateExit
-};

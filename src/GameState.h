@@ -1,15 +1,17 @@
 #pragma once
 
 #include "./OPengine.h"
-#include "./Pipeline/include/OPrendererFullForward.h"
+#include "./Pipeline/include/Renderers/OPrendererForward.h"
 #include "OPMconvert.h"
 
-struct ExporterState {
+class ExporterState : public OPgameState {
+public:
 	OPexporter exporter;
 
 	OPscene scene;
-	OPrendererFullForward* fullForwardRenderer;
+	OPrendererForward fullForwardRenderer;
 	OPcamFreeFlight camera;
+	OPcam shadowCam;
 	OPuint currentFile;
 	OPuint dropCount;
 	OPstring* dropFilenames;
@@ -28,10 +30,10 @@ struct ExporterState {
 	ui32 splitterIndex = 0;
 	AnimationSplit splitters[100];
 
-	void Init();
+	void Init(OPgameState* state);
 	OPint Update(OPtimer* timer);
 	void Render(OPfloat delta);
-	OPint Exit();
+	OPint Exit(OPgameState* state);
 
 	bool _loadOPMFromFile(const OPchar* filename);
 	bool _loadMeshFromFile(const OPchar* filename);
@@ -42,4 +44,4 @@ struct ExporterState {
 	void _processModel(const OPchar* filename);
 };
 
-extern OPgameState GS_EXAMPLE;
+extern ExporterState GS_EXAMPLE;

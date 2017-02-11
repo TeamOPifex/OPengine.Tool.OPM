@@ -64,7 +64,7 @@ void ApplicationSetup() {
 //////////////////////////////////////
 OP_MAIN_START
 
-	OPLOGLEVEL = (ui32)OPlogLevel::TIMING;
+	OPLOGLEVEL = (ui32)OPlogLevel::VERBOSE;
 	OPlog("Starting up OPifex Engine");
 
 	//if (argc == 2) {
@@ -99,7 +99,7 @@ OP_MAIN_START
 	//	// ExportOPM(args[1], output, 1.0f, NULL, true, true, true, true, false, false, false, false, 0, NULL, NULL, NULL);
 	//} else {
 		ApplicationSetup();
-		OP_MAIN_RUN
+		OP_MAIN_RUN_STEPPED
 		//OP_MAIN_RUN_STEPPED
 	//}
 OP_MAIN_END
