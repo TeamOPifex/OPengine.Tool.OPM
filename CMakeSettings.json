@@ -1,0 +1,41 @@
+{
+  "configurations": [
+    {
+      "name": "OPM Tool Debug",
+      "generator": "Visual Studio 15 2017 Win64",
+      "buildRoot": "${env.LOCALAPPDATA}\\CMakeBuild\\${workspaceHash}\\build\\${name}",
+      "cmakeCommandArgs": "",
+      "configurationType": "Debug",
+      "variables": [
+        {
+          "name": "OPIFEX_MARKETPLACE",
+          "value": "C:/Users/ghoofman/.opengine/marketplace"
+        },
+        {
+          "name": "OPENGINE_ADDONS",
+          "value": "imgui.0.0.1;assimp.0.0.1"
+        },
+        {
+          "name": "OPIFEX_ENGINE_REPOSITORY",
+          "value": "C:/Users/ghoofman/.opengine/repos/OPengine/opengine_2327bf31-8f2b-4a9e-ad16-af8129cab398"
+        },
+        {
+          "name": "OPIFEX_BINARIES",
+          "value": "C:/Users/ghoofman/.opengine/build/opengine_2327bf31-8f2b-4a9e-ad16-af8129cab398_build/Binaries"
+        },
+        {
+          "name": "OPIFEX_OS",
+          "value": "OPIFEX_WIN64"
+        },
+        {
+          "name": "RENDER_TARGET",
+          "value": "OPENGL_3_3"
+        },
+        {
+          "name": "OPIFEX_OPTION_RELEASE",
+          "value": "FALSE"
+        }
+      ]
+    }
+  ]
+}
