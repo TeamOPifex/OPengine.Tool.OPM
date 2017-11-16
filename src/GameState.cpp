@@ -159,6 +159,10 @@ void ExporterState::renderGUISettings() {
 		}
 	}
 
+	if (ImGui::Checkbox("Split anim name", &modelViewer.splitFileNameForAnim)) {
+
+	}
+
 	if (ImGui::Button("Show Add Anims")) {
 		showAddAnimation = !showAddAnimation;
 	}
@@ -333,7 +337,7 @@ void ExporterState::_processModel(const OPchar* filename) {
 	}
 
 	if (autoExport) {
-		if (modelViewer.splitterIndex == 0) {
+		if (modelViewer.splitterIndex == 0 || !modelViewer.splitFileNameForAnim) {
 			exporter.Export(modelViewer.OutputAbsolutePath->C_Str());
 		}
 		else {

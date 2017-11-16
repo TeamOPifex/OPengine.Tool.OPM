@@ -21,6 +21,7 @@ public:
 	OPskeletonAnimationResult animations = { NULL, 0 };
 	OPskeletonAnimation* activeAnimation = NULL;
 	ui32 splitterIndex = 0;
+	bool splitFileNameForAnim = false;
 	AnimationSplit splitters[100];
 	OPtexture* result = NULL;
 

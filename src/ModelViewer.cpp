@@ -4,7 +4,7 @@
 
 
 OPboundingBox3D GetBounds(OPmesh* mesh);
-OPskeleton* LoadSkeletonFromFile(OPstring filePath);
+OPskeleton* LoadSkeletonFromFile(OPstring& filePath);
 
 ModelViewer::ModelViewer(OPscene* s, OPexporter* e) {
 	scene = s;
@@ -56,12 +56,12 @@ bool ModelViewer::LoadOPMFromFile(const OPchar* fullFilePath) {
 	if (OutputFilename != NULL) {
 		delete OutputFilename;
 	}
-	OutputFilename = GetFilenameOPM(fullFilePath);
+	OutputFilename = GetFilenameOPM(fullFilePath, splitFileNameForAnim);
 
 	if (OutputAbsolutePath != NULL) {
 		delete OutputAbsolutePath;
 	}
-	OutputAbsolutePath = GetAbsolutePathOPM(fullFilePath);
+	OutputAbsolutePath = GetAbsolutePathOPM(fullFilePath, splitFileNameForAnim);
 
 	return true;
 }
@@ -130,6 +130,10 @@ bool ModelViewer::LoadModelFromFile(const OPchar* filename, bool animsFromFile, 
 
 	OPmodel* model = exporter->existingModel;
 
+	if (model == NULL) {
+		return false;
+	}
+
 	if (activeSkeleton != NULL) {
 		entity = scene->Add(model, activeSkeleton, OPrendererEntityDesc(true, true, true, true));
 	}
@@ -155,12 +159,12 @@ bool ModelViewer::LoadModelFromFile(const OPchar* filename, bool animsFromFile, 
 	if (OutputFilename != NULL) {
 		delete OutputFilename;
 	}
-	OutputFilename = GetFilenameOPM(filename);
+	OutputFilename = GetFilenameOPM(filename, splitFileNameForAnim);
 
 	if (OutputAbsolutePath != NULL) {
 		delete OutputAbsolutePath;
 	}
-	OutputAbsolutePath = GetAbsolutePathOPM(filename);
+	OutputAbsolutePath = GetAbsolutePathOPM(filename, splitFileNameForAnim);
 
 	return true;
 }
@@ -255,7 +259,7 @@ OPboundingBox3D GetBounds(OPmesh* mesh) {
 }
 
 
-OPskeleton* LoadSkeletonFromFile(OPstring filePath) {
+OPskeleton* LoadSkeletonFromFile(OPstring& filePath) {
 	OPskeleton* result = NULL;
 	filePath.Add(".skel");
 	if (OPfile::Exists(filePath.C_Str())) {
