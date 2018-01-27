@@ -146,13 +146,13 @@ bool ExporterState::_loadMeshFromFile(const OPchar* filename) {
 				ui32 ind = str.IndexOfLast('_');
 				ui32 indEnd = str.IndexOfLast('.');
 				OPstring* result = str.Substr(ind + 1, indEnd);
-				animations = exporter.LoadAnimations(result->C_Str());
+				animations = exporter.LoadAnimations(result->C_Str(), true);
 
 				splitterIndex = 1;
 				splitters[0].Start = 0;
 				splitters[0].End = animations.Animations[0]->FrameCount;
 				splitters[0].Name = animations.AnimationNames[0];
-				
+
 				OPfree(result);
 			}
 			else {
@@ -247,7 +247,7 @@ void ExporterState::Init(OPgameState* state) {
 
 	OPfloat shadowCameraSize = 16.0f;
 	shadowCam.SetOrtho(OPvec3(-6, 6, 1), OPVEC3_ZERO, OPVEC3_UP, 0.1f, 15.0f, -shadowCameraSize, shadowCameraSize, -shadowCameraSize, shadowCameraSize);
-	
+
 	scene.Init(&fullForwardRenderer, 1000, 50);
 	scene.SetCamera(&camera.Camera);
 	scene.SetShadowCamera(&shadowCam);
@@ -379,7 +379,7 @@ void ExporterState::Render(OPfloat delta) {
 
 			ImGui::End();
 		}
-	
+
 	if (showSkeleton && activeSkeleton != NULL) {
 		ImGui::Begin("Skeleton");
 		OPimguiDebug(activeSkeleton);
