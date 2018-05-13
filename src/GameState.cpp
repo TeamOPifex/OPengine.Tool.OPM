@@ -30,6 +30,20 @@ bool MeshNameGetter(void* source, int pos, const char** result) {
 	return true;
 }
 
+const OPchar* textures[6] = {
+	"Albedo",
+	"Normal",
+	"Metal",
+	"Roughness",
+	"Ambient",
+	"MRA"
+};
+
+bool TextureNameGetter(void* source, int pos, const char** result) {
+	*result = textures[pos];
+	return true;
+}
+
 // Start up the exporter
 void ExporterState::Init(OPgameState* state) {
 	OPimguiInit(OPRENDERER_ACTIVE->OPWINDOW_ACTIVE, true);
@@ -45,19 +59,24 @@ void ExporterState::Init(OPgameState* state) {
 
 	OPfloat shadowCameraSize = 16.0f;
 	shadowCam.SetOrtho(OPvec3(-6, 6, 1), OPVEC3_ZERO, OPVEC3_UP, 0.1f, 15.0f, -shadowCameraSize, shadowCameraSize, -shadowCameraSize, shadowCameraSize);
-	
-	scene.Init(&fullForwardRenderer, 1000, 50);
+
+	//scene.Init(&fullForwardRenderer, 1000, 50)
+	scene.Init(&pbrRenderer, 1000, 50);
 	scene.SetCamera(&camera.Camera);
 	scene.SetShadowCamera(&shadowCam);
 
 	modelViewer = ModelViewer(&scene, &exporter);
 	windowSnapshot = new WindowSnapshot();
 
-	OPmodel* ground = OPquadCreateZPlane(1.0f, 1.0f, OPvec2(0,0), OPvec2(16, 16), (ui32)OPattributes::POSITION | (ui32)OPattributes::NORMAL | (ui32)OPattributes::TANGENT | (ui32)OPattributes::BITANGENT | (ui32)OPattributes::UV);
-	OPrendererEntity* groundEnt = scene.Add(ground, OPrendererEntityDesc(false, true, true, false));
-	groundEnt->SetAlbedoMap("Tile2.png");
-	groundEnt->world.SetScl(10, 0.1, 10)->Translate(0, -0.05, 0);
-
+	//OPmodel* ground = OPquadCreateZPlane(1.0f, 1.0f, OPvec2(0,0), OPvec2(16, 16), (ui32)OPattributes::POSITION | (ui32)OPattributes::NORMAL | (ui32)OPattributes::TANGENT | (ui32)OPattributes::BITANGENT | (ui32)OPattributes::UV);
+	//OPrendererEntity* groundEnt = scene.Add(ground, OPrendererEntityDesc(false, false, false, false));
+	//groundEnt->SetAlbedoMap("Tile2.png");
+	//groundEnt->world.SetScl(10, 0.1, 10)->Translate(0, -0.05, 0);
+	//groundEnt->material->AddParam("uNormalMap", (OPtexture*)OPCMAN.LoadGet("Default_Normals"), 1);
+	//groundEnt->material->AddParam("uMetallicMap", (OPtexture*)OPCMAN.LoadGet("Tile2"), 2);
+	//groundEnt->material->AddParam("uRoughnessMap", (OPtexture*)OPCMAN.LoadGet("Tile2"), 3);
+	//groundEnt->material->AddParam("uAOMap", (OPtexture*)OPCMAN.LoadGet("Default_Gloss"), 4);
+	
 }
 
 OPint ExporterState::Update(OPtimer* timer) {
@@ -66,7 +85,13 @@ OPint ExporterState::Update(OPtimer* timer) {
 		camera.Update(timer);
 
 	scene.Update(timer);
-	modelViewer.entity->world.SetScl(modelViewer.Scale)->Translate(0, -1.0 * modelViewer.Scale * modelViewer.bounds.min.y, 0);
+	if (modelViewer.entity != NULL) {
+		modelViewer.entity->world.SetScl(modelViewer.Scale)->
+			RotY(OPradians(modelViewer.Rotate.y))->
+			RotX(OPradians(modelViewer.Rotate.x))->
+			RotZ(OPradians(modelViewer.Rotate.z))->
+			Translate(0, -1.0 * modelViewer.Scale * modelViewer.bounds.min.y, 0);
+	}
 
 	if (useAnimation && modelViewer.activeAnimation != NULL && modelViewer.activeSkeleton != NULL) {
 		modelViewer.activeAnimation->Update(timer);
@@ -122,7 +147,7 @@ void ExporterState::renderGUISettings() {
 	bool always = true;
 
 	ImGui::SetNextWindowPos(ImVec2(10, 30), ImGuiSetCond_::ImGuiSetCond_FirstUseEver);
-	ImGui::Begin("Settings", &always, ImVec2(250, 475), -1.0F, ImGuiWindowFlags_NoResize);
+	ImGui::Begin("Settings", &always, ImVec2(250, 575), -1.0F, ImGuiWindowFlags_NoResize);
 
 	ImGui::Checkbox("Normals", &exporter.Feature_Normals);
 	ImGui::Checkbox("UVs", &exporter.Feature_UVs);
@@ -147,6 +172,8 @@ void ExporterState::renderGUISettings() {
 		modelViewer.Scale = 0.01f;
 	}
 	ImGui::InputFloat("Scale", &modelViewer.Scale, 0.1, 1.0, 6);
+
+	ImGui::SliderFloat3("Rotate", (f32*)&modelViewer.Rotate, 0, 360);
 	//ImGui::SliderFloat("Scale", &Scale, 0.001f, 100.0f);
 
 	ImGui::Spacing();
@@ -282,24 +309,30 @@ void ExporterState::renderGUIMeshSelect() {
 }
 
 void ExporterState::renderGUITextureSelect() {
-	if (modelViewer.result == NULL) return;
 	bool always = true;
 
 	ui32 windowWidth = OPRENDERER_ACTIVE->OPWINDOW_ACTIVE->Width;
-
 	ImGui::SetNextWindowPos(ImVec2(windowWidth - 128 - 16 - 4, 60));
 	ui32 childWindowWidth = 128 + 16;
+
 	ImGui::Begin("CurrentTextures", &always, ImVec2(childWindowWidth, 128 + 16 + 16), 0.0f, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
-	OPtextureGL* glTex = (OPtextureGL*)modelViewer.result->internalPtr;
-	ImTextureID tex = (void*)glTex->Handle;
-	ImGui::Image(tex, ImVec2(128, 128), ImVec2(0, 0), ImVec2(1, 1), ImColor(255, 255, 255, 255), ImColor(255, 255, 255, 128));
+	if (ImGui::Combo(" ", &modelViewer.textureInd, TextureNameGetter, NULL, 6)) {
 
-	ImVec2 textSize = ImGui::CalcTextSize("Diffuse");
-	ImGui::Text("");
-	ui32 offset = (childWindowWidth / 2) - (textSize.x / 2);
-	ImGui::SameLine(offset);
-	ImGui::Text("Diffuse");
+	}
+
+	if (modelViewer.textures[modelViewer.textureInd] != NULL) {
+
+		OPtextureGL* glTex = (OPtextureGL*)modelViewer.textures[modelViewer.textureInd]->internalPtr;
+		ImTextureID tex = (void*)glTex->Handle;
+		ImGui::Image(tex, ImVec2(128, 128), ImVec2(0, 0), ImVec2(1, 1), ImColor(255, 255, 255, 255), ImColor(255, 255, 255, 128));
+
+		//ImVec2 textSize = ImGui::CalcTextSize("Diffuse");
+		//ImGui::Text("");
+		//ui32 offset = (childWindowWidth / 2) - (textSize.x / 2);
+		//ImGui::SameLine(offset);
+		//ImGui::Text("Diffuse");
+	}
 
 	ImGui::End();
 }

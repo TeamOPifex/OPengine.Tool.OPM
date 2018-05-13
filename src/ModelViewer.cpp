@@ -11,10 +11,22 @@ ModelViewer::ModelViewer(OPscene* s, OPexporter* e) {
 	exporter = e;
 
 	OPmodel* model = (OPmodel*)OPCMAN.LoadGet("box.opm");
-	entity = scene->Add(model, OPrendererEntityDesc(false, true, true, false));
+	entity = scene->Add(model, OPrendererEntityDesc(false, false, false, false));
 	bounds = OPboundingBox3D(OPvec3(-0.5), OPvec3(0.5));
 	entity->SetAlbedoMap("Default_Albedo.png");
-	entity->world.SetScl(Scale)->Translate(0, (bounds.max.y - bounds.min.y) / 2.0f, 0);
+	entity->material->SetMap("uNormalMap", OPtexture::Load("Default_Albedo.png"));
+	entity->material->SetMap("uNormalMap", OPtexture::Load("EmptyNormals.png"));
+	entity->material->SetMap("uMetallicRoughnessAOMap", OPtexture::Load("EmptyAO.png"));
+	entity->world.
+		SetScl(Scale)->
+		RotY(Rotate.y)->
+		RotX(Rotate.x)->
+		RotZ(Rotate.z)->
+		Translate(0, (bounds.max.y - bounds.min.y) / 2.0f, 0);
+
+	for (ui32 i = 0; i < 6; i++) {
+		textures[i] = NULL;
+	}
 }
 
 
@@ -35,10 +47,10 @@ bool ModelViewer::LoadOPMFromFile(const OPchar* fullFilePath) {
 	activeSkeleton = LoadSkeletonFromFile(filePath);
 
 	if (activeSkeleton != NULL) {
-		entity = scene->Add(model, activeSkeleton, OPrendererEntityDesc(true, true, true, true));
+		entity = scene->Add(model, activeSkeleton, OPrendererEntityDesc(true, false, false, true));
 	}
 	else {
-		entity = scene->Add(model, OPrendererEntityDesc(false, true, true, true));
+		entity = scene->Add(model, OPrendererEntityDesc(false, false, false, true));
 	}
 
 	// Setup the materials per mesh in the model
@@ -47,10 +59,10 @@ bool ModelViewer::LoadOPMFromFile(const OPchar* fullFilePath) {
 		bounds = GetBounds(&model->meshes[i]);
 
 		// Diffuse
-		result = LoadTexture(fullFilePath, model->meshes[i].materialDesc->diffuse);
+		textures[0] = LoadTexture(fullFilePath, model->meshes[i].materialDesc->diffuse);
 
-		if (result == NULL) entity->SetAlbedoMap(DEFAULT_TEXTURE, i);
-		else entity->SetAlbedoMap(result, i);
+		if (textures[0] == NULL) entity->SetAlbedoMap(DEFAULT_TEXTURE, i);
+		else entity->SetAlbedoMap(textures[0], i);
 	}
 
 	if (OutputFilename != NULL) {
@@ -84,7 +96,9 @@ bool ModelViewer::LoadModelFromFile(const OPchar* filename, bool animsFromFile, 
 
 	bounds = OPboundingBox3D();
 
-	scene->Remove(entity);
+	if (entity != NULL) {
+		scene->Remove(entity);
+	}
 
 	activeSkeleton = NULL;
 
@@ -135,10 +149,10 @@ bool ModelViewer::LoadModelFromFile(const OPchar* filename, bool animsFromFile, 
 	}
 
 	if (activeSkeleton != NULL) {
-		entity = scene->Add(model, activeSkeleton, OPrendererEntityDesc(true, true, true, true));
+		entity = scene->Add(model, activeSkeleton, OPrendererEntityDesc(true, false, false, true));
 	}
 	else {
-		entity = scene->Add(model, OPrendererEntityDesc(false, true, true, true));
+		entity = scene->Add(model, OPrendererEntityDesc(false, false, false, true));
 	}
 
 	// Setup the materials per mesh in the model
@@ -147,12 +161,12 @@ bool ModelViewer::LoadModelFromFile(const OPchar* filename, bool animsFromFile, 
 		bounds = GetBounds(&model->meshes[i]);
 
 		// Diffuse
-		result = LoadTexture(filename, model->meshes[i].materialDesc->diffuse);
-		if (result == NULL) {
+		textures[0] = LoadTexture(filename, model->meshes[i].materialDesc->diffuse);
+		if (textures[0] == NULL) {
 			entity->SetAlbedoMap("Default_Albedo.png", i);
 		}
 		else {
-			entity->SetAlbedoMap(result, i);
+			entity->SetAlbedoMap(textures[0], i);
 		}
 	}
 
@@ -173,7 +187,7 @@ bool ModelViewer::ApplyTexture(const OPchar* filename, ui32 meshInd) {
 	OPtexture* tex = (OPtexture*)OPCMAN.LoadFromFile(filename);
 	if (tex == NULL) return false;
 
-	result = tex;
+	textures[textureInd] = tex;
 
 
 	OPstring texName(filename);
@@ -187,17 +201,86 @@ bool ModelViewer::ApplyTexture(const OPchar* filename, ui32 meshInd) {
 		texName.Init(&texName._data[pos + 1]);
 	}
 
-	if (meshInd == 0) {
-		for (ui32 i = 0; i < entity->model->meshCount; i++) {
-			entity->SetAlbedoMap(tex, i);
-			entity->model->meshes[i].materialDesc->diffuse = OPstringCopy(texName.C_Str());
+	switch (textureInd) {
+		case 0: {
+			if (meshInd == 0) {
+				for (ui32 i = 0; i < entity->model->meshCount; i++) {
+					entity->SetAlbedoMap(tex, i);
+					entity->model->meshes[i].materialDesc->diffuse = OPstringCopy(texName.C_Str());
+				}
+			}
+			else {
+				entity->SetAlbedoMap(tex, meshInd - 1);
+				entity->model->meshes[meshInd - 1].materialDesc->diffuse = OPstringCopy(texName.C_Str());
+			}
+			break;
+		}
+		case 1: {
+			if (meshInd == 0) {
+				for (ui32 i = 0; i < entity->model->meshCount; i++) {
+					entity->material[i].AddParam("uNormalMap", tex, 0);
+					entity->model->meshes[i].materialDesc->normals = OPstringCopy(texName.C_Str());
+				}
+			}
+			else {
+				entity->material[meshInd - 1].AddParam("uNormalMap", tex, 0);
+				entity->model->meshes[meshInd - 1].materialDesc->normals = OPstringCopy(texName.C_Str());
+			}
+			break;
+		}
+		case 2: {
+			if (meshInd == 0) {
+				for (ui32 i = 0; i < entity->model->meshCount; i++) {
+					entity->material[i].AddParam("uMetallicMap", tex, 0);
+					entity->model->meshes[i].materialDesc->other1 = OPstringCopy(texName.C_Str());
+				}
+			}
+			else {
+				entity->material[meshInd - 1].AddParam("uMetallicMap", tex, 0);
+				entity->model->meshes[meshInd - 1].materialDesc->other1 = OPstringCopy(texName.C_Str());
+			}
+			break;
+		}
+		case 3: {
+			if (meshInd == 0) {
+				for (ui32 i = 0; i < entity->model->meshCount; i++) {
+					entity->material[i].AddParam("uRoughnessMap", tex, 0);
+					entity->model->meshes[i].materialDesc->other2 = OPstringCopy(texName.C_Str());
+				}
+			}
+			else {
+				entity->material[meshInd - 1].AddParam("uRoughnessMap", tex, 0);
+				entity->model->meshes[meshInd - 1].materialDesc->other2 = OPstringCopy(texName.C_Str());
+			}
+			break;
+		}
+		case 4: {
+			if (meshInd == 0) {
+				for (ui32 i = 0; i < entity->model->meshCount; i++) {
+					entity->material[i].AddParam("uAOMap", tex, 0);
+					entity->model->meshes[i].materialDesc->ambient = OPstringCopy(texName.C_Str());
+				}
+			}
+			else {
+				entity->material[meshInd - 1].AddParam("uAOMap", tex, 0);
+				entity->model->meshes[meshInd - 1].materialDesc->ambient = OPstringCopy(texName.C_Str());
+			}
+			break;
+		}
+		case 5: {
+			if (meshInd == 0) {
+				for (ui32 i = 0; i < entity->model->meshCount; i++) {
+					entity->material[i].AddParam("uMetallicRoughnessAOMap", tex, 0);
+					entity->model->meshes[i].materialDesc->ambient = OPstringCopy(texName.C_Str());
+				}
+			}
+			else {
+				entity->material[meshInd - 1].AddParam("uMetallicRoughnessAOMap", tex, 0);
+				entity->model->meshes[meshInd - 1].materialDesc->ambient = OPstringCopy(texName.C_Str());
+			}
+			break;
 		}
 	}
-	else {
-		entity->SetAlbedoMap(tex, meshInd - 1);
-		entity->model->meshes[meshInd - 1].materialDesc->diffuse = OPstringCopy(texName.C_Str());
-	}
-
 }
 
 bool ModelViewer::ProcessAnimationsFile(const OPchar* filename) {
