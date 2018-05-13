@@ -15,6 +15,7 @@ public:
 	OPrendererEntity* entity = NULL;
 	OPboundingBox3D bounds;
 	OPfloat Scale = 1.0f;
+	OPvec3 Rotate = OPVEC3_ZERO;
 	OPskeleton* activeSkeleton = NULL;
 	OPstring* OutputFilename = NULL;
 	OPstring* OutputAbsolutePath = NULL;
@@ -23,7 +24,8 @@ public:
 	ui32 splitterIndex = 0;
 	bool splitFileNameForAnim = false;
 	AnimationSplit splitters[100];
-	OPtexture* result = NULL;
+	OPtexture* textures[6];
+	i32 textureInd = 0;
 
 	ModelViewer() {}
 	ModelViewer(OPscene* s, OPexporter* e);

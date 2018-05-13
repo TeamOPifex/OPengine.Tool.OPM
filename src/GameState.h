@@ -2,6 +2,7 @@
 
 #include "./OPengine.h"
 #include "./Pipeline/include/Renderers/OPrendererForward.h"
+#include "./Pipeline/include/Renderers/OPrendererPBR.h"
 #include "OPMconvert.h"
 #include "ModelViewer.h"
 #include "WindowSnapshot.h"
@@ -14,6 +15,7 @@ public:
 
 	OPscene scene;
 	OPrendererForward fullForwardRenderer;
+	OPrendererPBR pbrRenderer;
 	OPcamFreeFlight camera;
 	OPcam shadowCam;
 
